@@ -29,7 +29,7 @@ button{font-family:inherit;touch-action:none;cursor:pointer;-webkit-user-select:
 #pips0 .pip.on{background:var(--p1);box-shadow:0 0 10px var(--p1)}
 #pips1 .pip.on{background:var(--p2);box-shadow:0 0 10px var(--p2)}
 .pip.pop{animation:pipPop .5s}
-#scoreTxt{font-size:28px;font-weight:900;font-style:italic;letter-spacing:2px;line-height:1.1}
+#scoreTxt{font-size:28px;font-weight:900;font-style:italic;letter-spacing:2px;line-height:1.1;white-space:nowrap}
 #sc0{color:var(--p1);text-shadow:0 0 10px var(--p1)}#sc1{color:var(--p2);text-shadow:0 0 10px var(--p2)}
 #timer{font-size:12px;font-weight:800;letter-spacing:1px;opacity:.9;white-space:nowrap}
 #timer.sd{color:#ff3a3a;animation:blink .35s infinite;opacity:1}
@@ -225,7 +225,9 @@ button{font-family:inherit;touch-action:none;cursor:pointer;-webkit-user-select:
 #rotate{position:fixed;inset:0;z-index:100;background:#05060f;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;font-size:20px;font-weight:900;text-align:center;padding:20px}
 #rotate .phone{width:60px;height:100px;border:5px solid #fff;border-radius:12px;animation:rot 1.6s ease-in-out infinite}
 #rotate small{font-size:13px;opacity:.6;font-weight:600}
-@media (orientation:portrait) and (max-width:1100px){#rotate{display:flex}}
+#rotate.on{display:flex}
+#rotate button{pointer-events:auto;margin-top:6px;padding:11px 24px;border-radius:12px;border:2px solid #fff;font-size:16px;font-weight:900;color:#fff;background:rgba(255,255,255,.12)}
+#rotate .phone.flat{display:none}
 #nothree{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:30px;font-size:18px;z-index:200;background:#05060f}
 
 @media (max-height:560px){.pname{font-size:13px}.bar{height:15px}.bar span{line-height:13px;font-size:10px}.lpanel{gap:4px;padding:7px 9px}.psel button{width:32px;height:32px}.pval b{font-size:15px}.pval small{font-size:9px}}
@@ -324,7 +326,7 @@ button{font-family:inherit;touch-action:none;cursor:pointer;-webkit-user-select:
 </div>
 
 <div id="result"><div id="resTitle">1P WIN!</div><div id="resSub">4 : 0</div><div class="rb"><button class="main" id="btnRematch">REMATCH</button><button id="btnLobby">LOBBY</button></div></div>
-<div id="rotate"><div class="phone"></div>기기를 가로로 돌려주세요<small>태블릿 가로 화면 전용 2인 대전 게임입니다</small></div>
+<div id="rotate"><div class="phone" id="rotPhone"></div><div id="rotMsg">기기를 가로로 돌려주세요</div><small id="rotSub">태블릿 가로 화면 전용 2인 대전 게임입니다</small><button id="rotGo">그냥 계속하기</button></div>
 
 <script>
 (function(){
@@ -1861,8 +1863,22 @@ function resize(){
   cam.baseFov=camera.fov=w/h<1.25?56:48;camera.updateProjectionMatrix();
   pMat.uniforms.uScale.value=h*DPR/(2*Math.tan(camera.fov*Math.PI/360));
 }
-window.addEventListener('resize',resize);window.addEventListener('orientationchange',()=>setTimeout(resize,200));
-resize();
+/* 화면 방향 안내: 뷰포트가 확실히 세로일 때만, 닫을 수 있는 안내로 표시 */
+let rotDismissed=false;try{rotDismissed=sessionStorage.getItem('bey_rot')==='1';}catch(e){}
+function checkRotate(){
+  const tall=innerHeight>innerWidth*1.15;let devLand=false;
+  try{const o=screen.orientation&&screen.orientation.type;devLand=!!o&&/landscape/.test(o);}catch(e){}
+  const show=tall&&!rotDismissed;
+  if(show){
+    $('rotMsg').textContent=devLand?'화면 영역이 좁아요':'기기를 가로로 돌려주세요';
+    $('rotSub').textContent=devLand?'이미 가로라면 우측 상단 ⛶(전체 화면)을 누르거나, 홈 화면에 추가해서 실행하세요':'태블릿 가로 화면 전용 2인 대전 게임입니다';
+    $('rotPhone').classList.toggle('flat',devLand);
+  }
+  $('rotate').classList.toggle('on',show);
+}
+$('rotGo').addEventListener('click',()=>{rotDismissed=true;try{sessionStorage.setItem('bey_rot','1');}catch(e){}checkRotate();});
+window.addEventListener('resize',()=>{resize();checkRotate();});window.addEventListener('orientationchange',()=>setTimeout(()=>{resize();checkRotate();},200));
+resize();checkRotate();
 
 let last=performance.now();
 function applyFilter(){
