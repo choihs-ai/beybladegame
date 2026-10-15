@@ -610,7 +610,7 @@ const Voice=(function(){
     /* 🎙 버튼: 사용 가능한 한국어 음성을 순서대로 바꿔 들어보기 */
     next(){if(!ss)return '음성 합성을 지원하지 않는 브라우저';pick();if(!list.length)return '한국어 음성 없음';manual=true;idx=(idx+1)%list.length;
       try{localStorage.setItem('bey_voice',list[idx].voiceURI);}catch(e){}
-      speak('고 슛! 저스트 임팩트!',{rate:1.0,pitch:0.9});return list[idx].name+(isMale(list[idx])?' ♂':' (톤↓)')+' ('+(idx+1)+'/'+list.length+')';},
+      speak('쓰리, 투, 원, 고 슛!',{rate:1.0,pitch:0.9});return list[idx].name+(isMale(list[idx])?' ♂':' (톤↓)')+' ('+(idx+1)+'/'+list.length+')';},
     stop(){if(ss)try{ss.cancel();}catch(e){}}
   };
 })();
@@ -1078,7 +1078,7 @@ function startRound(){
   const T=game.round===1?2.1:1.4;game.introT=game.introDur=T;
   bigText('ROUND '+game.round,'rnd');showVS();
   const c0=players[0].cfg,c1=players[1].cfg;
-  Voice.say(game.round===1?BLADES[c0.blade].name+' 대 '+BLADES[c1.blade].name+'!':'라운드 '+game.round+'!',2);
+  
   after(T,()=>{$('vs').classList.remove('on');bigText('3','cnt');Snd.beep(660);Voice.say('쓰리',2);});
   after(T+0.6,()=>{bigText('2','cnt');Snd.beep(660);Voice.say('투',2);});
   after(T+1.2,()=>{bigText('1','cnt');Snd.beep(660);Voice.say('원',2);});
@@ -1091,7 +1091,7 @@ function fire(p,forced){
   pl.shotRes=res;t.rpm=rpm;t.unstable=res==='miss'?1:0;t.overclock=res==='oc';
   const sp=3.5+5*Math.min(L,1);t.vx=Math.cos(pl.aim)*sp;t.vz=Math.sin(pl.aim)*sp;
   t.state='drop';t.dropT=0;launchers[p].fly=0;
-  Snd.rip(res);if(res==='oc')Voice.say('오버클럭!',1);
+  Snd.rip(res);
   const gr=$('gr'+p);
   if(res==='oc'){popup('OVERCLOCK!!','c-oc',p,'RPM 150% · 즉시 익스트림 대시');gr.textContent='OVERCLOCK!';gr.style.color='#ff3b30';flashScreen(0.25);shake(0.4);}
   else if(res==='miss'){popup(forced?'OVERFLOW...':'MISS SHOT...','c-miss',p,'불발! RPM 75%');gr.textContent='MISS';gr.style.color='#9aa';}
@@ -1117,10 +1117,10 @@ function resolveFinish(){
   if(game.clash){game.clash=null;tops.forEach(t=>t.locked=false);}
   hideMashUI();$('cliffUI').className='layer';fx.fb=0;setVig(game.sudden?'sd':'');
   players.forEach(pl=>{pl.charging=false;pl.ult=null;});
-  if(pf.draw){popup('DRAW!','c-finish',-1,'동시 피니시 · 양쪽 0점');Voice.say('무승부!',3);after(3.0,()=>startRound());return;}
+  if(pf.draw){popup('DRAW!','c-finish',-1,'동시 피니시 · 양쪽 0점');after(3.0,()=>startRound());return;}
   const w=1-pf.loser.p,F=FIN[pf.type];
   popup(F.en,pf.type==='burst'||pf.type==='xtreme'?'c-burst':'c-finish',-1,sideName(w)+' +'+F.pts+(pf.type==='xtreme'?' · 익스트림 존!':''));
-  Voice.say(F.kr,3);
+  
   if(pf.type==='xtreme'){flashScreen(0.6);shake(1.6);}
   if(tops[w].state==='spin')game.orbit={p:w,t:2.6,a:Math.atan2(tops[w].x,tops[w].z+6)};
   after(0.6,()=>{game.score[w]+=F.pts;updateScore(true);Snd.score();});
@@ -1131,7 +1131,7 @@ function updateScore(anim){
 }
 function matchEnd(w){
   game.state='match';Snd.setBgm('off');Snd.fanfare();
-  Voice.say((w===0?'플레이어 원':(players[1].ai?'에이아이':'플레이어 투'))+' 승리!',3);
+  
   // winner takes center stage behind the result screen
   for(let p=0;p<2;p++){const t=tops[p];if(p===w){buildTopFor(p);Object.assign(t,{state:'spin',x:0,z:0,vx:0,vz:0,rpm:1.1,limit:false,hanging:false,locked:false,unstable:0,clicks:0,tk:{x:0,z:0}});t.mesh.root.visible=true;}else{t.state='dead';if(t.mesh)t.mesh.root.visible=false;}trails[p].reset();}
   clearDebris();
@@ -1196,7 +1196,7 @@ function fling(t,opt){
   const y=floorY(t.x,t.z);
   shock(t.x,y,t.z,PCOL[t.p],3.2,0.45);sparks(t.x,y+0.3,t.z,26,[PC[t.p],C.white,C.cyan],8,0.5);
   Snd.dash();game.railFlash=1;shake(0.25);
-  const pl=players[t.p];if(opt.label){popup(opt.label,opt.cls||'c-info',t.p);}else if(pl.dashPopCD<=0){popup('XTREME DASH!','c-info',t.p);pl.dashPopCD=1.6;Voice.say('익스트림 대시!',1);}
+  const pl=players[t.p];if(opt.label){popup(opt.label,opt.cls||'c-info',t.p);}else if(pl.dashPopCD<=0){popup('XTREME DASH!','c-info',t.p);pl.dashPopCD=1.6;}
 }
 function edge(t){
   const r=Math.hypot(t.x,t.z),lim=R-t.st.rad*0.8;if(r<=lim)return;
@@ -1304,7 +1304,7 @@ function resolveHit(a,b,nx,nz,vn){
 }
 function justImpact(p,cx,cy,cz,perfect){
   fx.invertT=0.075;fx.darkT=0.17;fx.hitstop=Math.max(fx.hitstop,0.15);
-  lightning(cx,cy,cz);Snd.thunder();shake(1.7);Voice.say(perfect?'퍼펙트 임팩트!':'저스트 임팩트!',2);
+  lightning(cx,cy,cz);Snd.thunder();shake(1.7);
   shock(cx,cy-0.5,cz,0xffd23f,7,0.6);shock(cx,cy-0.5,cz,0xffffff,4,0.4);
   sparks(cx,cy,cz,60,[C.gold,C.white,C.cyan],14,0.9);
   const cb=players[p].combo;
@@ -1326,7 +1326,7 @@ function startClash(nx,nz){
   game.clash={t:1.5,dur:1.5,n:[nx,nz],cnt:[0,0],mx:(a.x+b.x)/2,mz:(a.z+b.z)/2,g:0};
   for(const t of tops){t.vx=0;t.vz=0;t.locked=true;t.dashing=0;t.dashPhase=0;}
   players.forEach(pl=>{pl.aiS.mashAcc=0;pl.parryT=0;pl.parryArmed=false;pl.charging=false;pl.charge=0;});
-  popup('CLASH!!','c-clash',-1,'BLADE LOCK');Snd.clashStart();Voice.say('클래시!',2);fx.hitstop=0.1;shake(0.9);flashScreen(0.35);
+  popup('CLASH!!','c-clash',-1,'BLADE LOCK');Snd.clashStart();fx.hitstop=0.1;shake(0.9);flashScreen(0.35);
   $('mashL').classList.add('on');$('mashR').classList.add('on');$('tug').classList.add('on');
   $('mc0').textContent='0';$('mc1').textContent='0';
 }
@@ -1373,7 +1373,7 @@ function startCliff(t,nx,nz){
   game.cliff={t,p:t.p,time:0.6,g:0,nx,nz};t.hanging=true;t.vx=0;t.vz=0;t.dashing=0;t.dashPhase=0;
   t.x=nx*(R+0.32);t.z=nz*(R+0.32);
   players[t.p].aiS.mashAcc=0;
-  popup('CLIFFHANGER!!','c-save',-1);Snd.alarm();shake(0.6);Voice.say('벼랑 끝!',2);
+  popup('CLIFFHANGER!!','c-save',-1);Snd.alarm();shake(0.6);
   const ui=$('cliffUI');ui.className='layer on s'+t.p;$('cliffFill').style.width='0%';setVig('cl');
 }
 function cliffMash(p){const c=game.cliff;if(!c||c.p!==p)return;c.g=Math.min(1,c.g+0.1);Snd.tick(c.g);
@@ -1385,7 +1385,7 @@ function cliffSave(){
   const c=game.cliff,t=c.t;game.cliff=null;t.hanging=false;players[t.p].cliffUsed=true;
   t.x=c.nx*(R-1.0);t.z=c.nz*(R-1.0);const ang=Math.atan2(-c.nz,-c.nx)+rand(-0.3,0.3);t.vx=Math.cos(ang)*15;t.vz=Math.sin(ang)*15;t.dashing=0.6;t.rpm=Math.min(1.6,t.rpm+0.1);
   $('cliffUI').className='layer';setVig(game.sudden?'sd':'');
-  popup('MIRACLE SAVE!!','c-save',-1,sideName(t.p)+' 기적의 생환');addSP(t.p,20);Snd.save();Voice.say('기적의 생환!',2);fx.hitstop=0.07;shake(1);flashScreen(0.3);
+  popup('MIRACLE SAVE!!','c-save',-1,sideName(t.p)+' 기적의 생환');addSP(t.p,20);Snd.save();fx.hitstop=0.07;shake(1);flashScreen(0.3);
   const y=floorY(t.x,t.z);shock(t.x,y,t.z,0xff9020,5,0.6);
   for(let i=0;i<90;i++){const a2=ang+rand(-0.5,0.5)+Math.PI,s=rand(4,14);emit(t.x,y+0.4,t.z,Math.cos(a2)*s,rand(1,7),Math.sin(a2)*s,i%3?C.orange:C.gold,rand(0.2,0.45),rand(0.4,0.9),0.3,1.5);}
 }
@@ -1419,7 +1419,7 @@ function limitBreak(p){
   const m=t.mesh;scene.attach(m.ring);addDebris(m.ring,rand(-5,5),10,rand(-5,5),2.5,false);
   m.mCol.emissive.setHex(0xff2000);m.mCol.emissiveIntensity=0.9;m.mGem.emissive.setHex(0xff0000);m.mGem.color.setHex(0xff3000);m.mGem.emissiveIntensity=2;
   trails[p].mat.uniforms.uColor.value.setHex(0xff3010);
-  popup('LIMIT BREAK!!','c-limit',-1,'공격력·속도 2배 / 버스트 체력 1%');Voice.say('리미트 브레이크!',2);
+  popup('LIMIT BREAK!!','c-limit',-1,'공격력·속도 2배 / 버스트 체력 1%');
   Snd.limit();fx.lb=0.5;fx.hitstop=0.1;shake(1);
   const y=floorY(t.x,t.z);shock(t.x,y,t.z,0xff2000,6,0.6);shock(t.x,y,t.z,0xffa000,3.5,0.4);
   sparks(t.x,y+0.6,t.z,70,[C.red,C.orange,C.gold],12,0.9);
@@ -1476,7 +1476,7 @@ function addSP(p,v){
 function ultimate(p){
   const pl=players[p],t=tops[p],o=tops[1-p],U=BLADES[t.st.blade].ult;pl.sp=0;pl.spReady=false;
   const y=floorY(t.x,t.z);
-  fx.hitstop=Math.max(fx.hitstop,0.12);flashScreen(0.4);shake(1.1);Snd.ult();Voice.say(U.kr+'!',3);
+  fx.hitstop=Math.max(fx.hitstop,0.12);flashScreen(0.4);shake(1.1);Snd.ult();
   shock(t.x,y,t.z,PCOL[p],7,0.6);shock(t.x,y,t.z,0xffffff,4,0.4);
   sparks(t.x,y+0.6,t.z,70,[PC[p],C.white,C.gold],13,0.9);streaks(t.x,y+0.5,t.z,30,[PC[p],C.gold,C.white],14);
   if(U.kind==='storm'){pl.ult={type:'storm',n:U.n,n0:U.n,spd:U.spd,t:0.05,name:U.name};popup(U.name+'!!','c-limit',-1,sideName(p)+' '+U.n+'연속 필살 대시');}
@@ -1579,7 +1579,7 @@ function update(dt,rdt){
   if(game.state==='finish'){for(const t of tops)if(t.state==='spin'&&t.rpm<=0.05){t.rpm=0.05;}}
 }
 function suddenDeath(){
-  game.sudden=true;Snd.siren();Snd.setBgm('sudden');Voice.say('서든 데스!',3);popup('SUDDEN DEATH','c-sd',-1,'보호벽 붕괴 · 반발력 2배');setVig('sd');floorUniforms.uDanger.value=1;shake(1.2);flashScreen(0.4);
+  game.sudden=true;Snd.siren();Snd.setBgm('sudden');popup('SUDDEN DEATH','c-sd',-1,'보호벽 붕괴 · 반발력 2배');setVig('sd');floorUniforms.uDanger.value=1;shake(1.2);flashScreen(0.4);
   $('timer').className='sd';
   walls.forEach((w,k)=>{if(w.alive)after(0.25+k*0.05,()=>{breakWall(w,true);Snd.wall(0.6);shake(0.4);});});
 }
