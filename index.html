@@ -32,6 +32,12 @@ button{font-family:inherit;touch-action:none;cursor:pointer;-webkit-user-select:
 #scoreTxt{font-size:28px;font-weight:900;font-style:italic;letter-spacing:2px;line-height:1.1;white-space:nowrap}
 #sc0{color:var(--p1);text-shadow:0 0 10px var(--p1)}#sc1{color:var(--p2);text-shadow:0 0 10px var(--p2)}
 #timer{font-size:12px;font-weight:800;letter-spacing:1px;opacity:.9;white-space:nowrap}
+#evTxt{font-size:11px;font-weight:900;letter-spacing:1px;color:#d9b8ff;white-space:nowrap;text-shadow:0 0 8px #7a3cff}
+#evTxt:empty{display:none}
+.evrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;font-size:12px;font-weight:900;max-width:420px}
+.evrow span{width:100%;text-align:center;letter-spacing:2px;opacity:.85}
+.evrow button{padding:7px 11px;border-radius:9px;border:2px solid rgba(255,255,255,.28);background:rgba(10,14,30,.8);color:rgba(255,255,255,.55);font-weight:900;font-size:13px}
+.evrow button.on{color:#fff;background:linear-gradient(180deg,#8a4cff,#3a1580);border-color:#fff;box-shadow:0 0 14px rgba(138,76,255,.7)}
 #timer.sd{color:#ff3a3a;animation:blink .35s infinite;opacity:1}
 #roundTxt{font-size:10px;letter-spacing:3px;opacity:.6;font-weight:800}
 
@@ -280,6 +286,7 @@ button{font-family:inherit;touch-action:none;cursor:pointer;-webkit-user-select:
       <div class="pips" id="pips1"><i class="pip"></i><i class="pip"></i><i class="pip"></i><i class="pip"></i></div>
     </div>
     <div id="timer">READY</div>
+    <div id="evTxt"></div>
   </div>
   <button id="btnSnd" class="tbtn pulse" title="사운드">🔇</button>
   <button id="btnVoice" class="tbtn" title="아나운서 음성 바꾸기">🎙</button>
@@ -333,6 +340,7 @@ button{font-family:inherit;touch-action:none;cursor:pointer;-webkit-user-select:
   <div id="lcenter">
     <div><h1>BEYBLADE<br><span>OVERDRIVE</span></h1><div class="sub">DOPAMINE EDITION</div></div>
     <div class="lbottom">
+      <div class="evrow"><span>🎪 스타디움 이벤트 (켠 것 중 라운드마다 하나)</span><button data-ev="spin">🌀 회전 바닥</button><button data-ev="mag">🧲 자기장</button><button data-ev="item">💊 아이템 캡슐</button></div>
       <div class="modes"><button data-mode="pvp" id="mPvp">👥 2P 대전</button><button data-mode="ai" id="mAi">🤖 VS AI</button></div>
       <button id="btnStart">BATTLE START</button>
       <div class="keys">베이블레이드 X 룰 · 4점 선취 · 스핀 1 · 오버 2 · 버스트 2 · 익스트림 3<br>⌨ 1P: A 임팩트 · S 슛/연타/꾹=차지대시 · D 필살기·리미트 (조준 A/D)<br>⌨ 2P: J 임팩트 · K 슛/연타/꾹=차지대시 · L 필살기·리미트 (조준 J/L)<br>금색 링이 닫힐 때 IMPACT = PERFECT!<br>로비: Q/U 추천 조합 · A/S/D · J/K/L 파츠 · Enter 시작 · M 모드</div>
@@ -659,22 +667,22 @@ const blurTex=canvasTex(256,(g,s)=>{g.translate(s/2,s/2);for(let i=0;i<14;i++){g
 /* ---------- Stadium (shader floor) ---------- */
 const yR=surfY(R);
 const floorUniforms={uTime:{value:0},uDanger:{value:0},uRail:{value:0},uG0:{value:new THREE.Vector4(0,0,0,0)},uG1:{value:new THREE.Vector4(0,0,0,0)},
-  uC0:{value:C.p0.clone()},uC1:{value:C.p1.clone()},uBroken:{value:new Array(24).fill(0)},uPocket:{value:POCKET_TYPE.slice()},uBeat:{value:0}};
+  uC0:{value:C.p0.clone()},uC1:{value:C.p1.clone()},uBroken:{value:new Array(24).fill(0)},uPocket:{value:POCKET_TYPE.slice()},uBeat:{value:0},uRot:{value:0}};
 const floorMat=new THREE.ShaderMaterial({uniforms:floorUniforms,side:THREE.DoubleSide,
 vertexShader:`varying vec3 vW;void main(){vec4 w=modelMatrix*vec4(position,1.0);vW=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}`,
 fragmentShader:`
-uniform float uTime;uniform float uDanger;uniform float uRail;uniform float uBeat;uniform vec4 uG0;uniform vec4 uG1;uniform vec3 uC0;uniform vec3 uC1;uniform float uBroken[24];uniform float uPocket[24];
+uniform float uTime;uniform float uDanger;uniform float uRail;uniform float uBeat;uniform float uRot;uniform vec4 uG0;uniform vec4 uG1;uniform vec3 uC0;uniform vec3 uC1;uniform float uBroken[24];uniform float uPocket[24];
 varying vec3 vW;
 const float R=10.0;const float A=0.03;const float TAU=6.2831853;
 float ln(float d,float w){return 1.0-smoothstep(w,w+0.035,d);}
 void main(){
-  float r=length(vW.xz);float ang=atan(vW.z,vW.x);
+  float r=length(vW.xz);float ang0=atan(vW.z,vW.x);float ang=ang0-uRot;
   float fy=r<R?A*r*r:A*R*R;
   vec3 n=r<R?normalize(vec3(-2.0*A*vW.x,1.0,-2.0*A*vW.z)):vec3(0.0,1.0,0.0);
   vec3 L=normalize(vec3(0.35,1.0,0.5));
   float dif=0.45+0.55*max(dot(n,L),0.0);
   vec3 gridC=mix(vec3(0.2,0.45,1.0),vec3(1.0,0.15,0.25),uDanger);
-  float s=floor(mod(ang+TAU/48.0+TAU,TAU)/(TAU/24.0));
+  float s=floor(mod(ang0+TAU/48.0+TAU,TAU)/(TAU/24.0));
   float b=0.0;float pk=0.0;for(int i=0;i<24;i++){if(abs(float(i)-s)<0.5){b=uBroken[i];pk=uPocket[i];}}
   vec3 dangerC=pk>1.5?vec3(1.0,0.55,0.05):vec3(1.0,0.1,0.15);
   vec3 col;
@@ -1066,15 +1074,72 @@ function focusAt(x,y,z){projV.set(x,y,z).project(camera);anime.fx=clamp(projV.x*
 function speedLines(t,amt,col){if(amt>=anime.speed){if(t)focusAt(t.x,floorY(t.x,t.z)+0.6,t.z);else{anime.fx=0.5;anime.fy=0.45;}anime.col=col||'255,255,255';}anime.speed=Math.max(anime.speed,amt);}
 /* ---------- CINEMATIC CAMERA: hard cut to a low-angle bullet-time orbit at decisive moments ---------- */
 // type: hit | just | ult | finish ; follow: a top to track (else fixed point)
+/* ---------- STADIUM EVENTS (lobby option): rotating floor / magnetic zone / item capsules ---------- */
+const EVENTS={spin:{name:'🌀 회전 바닥',desc:'바닥이 돌며 팽이를 한쪽으로 흘려보냄'},mag:{name:'🧲 자기장',desc:'떠도는 자기장이 끌어당기고 RPM을 깎음'},item:{name:'💊 아이템 캡슐',desc:'캡슐을 먹으면 회복·수리·SP·파워업'}};
+let evOpts={spin:false,mag:false,item:false};
+try{const v=JSON.parse(localStorage.getItem('bey_events')||'null');if(v)evOpts=Object.assign(evOpts,v);}catch(e){}
+const magRing=flatRing(0.9,1,0x8a5cff,0.8),magRing2=flatRing(0.5,0.56,0xc9a8ff,0.6);
+const ITEM_KINDS=[{k:'rpm',c:0x3dff9a,label:'RPM 회복!'},{k:'burst',c:0xffd23f,label:'버스트 수리!'},{k:'sp',c:0xc78bff,label:'SP +40!'},{k:'power',c:0xff3b30,label:'파워업! 공격 ×1.5'}];
+const itemGeo=new THREE.OctahedronGeometry(0.34,0);
+function clearEventObjs(){magRing.visible=magRing2.visible=false;if(game.ev&&game.ev.items)game.ev.items.forEach(it=>{scene.remove(it.m);it.m.material.dispose();scene.remove(it.r);it.r.material.dispose();});}
+function pickEvent(){
+  clearEventObjs();game.ev=null;floorUniforms.uRot.value=0;
+  const on=Object.keys(evOpts).filter(k=>evOpts[k]);if(!on.length){$('evTxt').textContent='';return;}
+  const type=on[Math.random()*on.length|0];
+  if(type==='spin')game.ev={type,dir:Math.random()<0.5?1:-1};
+  else if(type==='mag')game.ev={type,a:Math.random()*TAU,x:0,z:0,r:2.4};
+  else game.ev={type,items:[],next:2.5};
+  $('evTxt').textContent='EVENT · '+EVENTS[type].name;
+}
+function spawnItem(){
+  const kind=ITEM_KINDS[Math.random()*ITEM_KINDS.length|0],a=Math.random()*TAU,r=rand(1.5,6.5),x=Math.cos(a)*r,z=Math.sin(a)*r;
+  const m=new THREE.Mesh(itemGeo,new THREE.MeshStandardMaterial({color:kind.c,emissive:kind.c,emissiveIntensity:1.2,metalness:0.3,roughness:0.2}));
+  const g=new THREE.RingGeometry(0.5,0.62,32);g.rotateX(-Math.PI/2);
+  const ring=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:kind.c,transparent:true,opacity:0.7,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+  m.position.set(x,floorY(x,z)+0.7,z);ring.position.set(x,floorY(x,z)+0.05,z);scene.add(m);scene.add(ring);
+  game.ev.items.push({kind,x,z,m,r:ring,ph:Math.random()*6});
+  shock(x,floorY(x,z),z,kind.c,2,0.4);Snd.ui();
+}
+function pickItem(t,it){
+  const k=it.kind.k,pl=players[t.p];
+  if(k==='rpm')t.rpm=Math.min(1.6,t.rpm+0.25);
+  else if(k==='burst'){t.burst=Math.min(t.burstMax,t.burst+t.burstMax*0.3);t.clicks=Math.max(0,t.clicks-1);}
+  else if(k==='sp')addSP(t.p,40);
+  else t.powerT=4;
+  popup(it.kind.label,'c-good',t.p);Snd.ready();
+  const y=floorY(it.x,it.z);shock(it.x,y,it.z,it.kind.c,3,0.45);sparks(it.x,y+0.6,it.z,30,[new THREE.Color(it.kind.c),C.white],7,0.8);
+}
+function updateEvent(dt){
+  const ev=game.ev;if(!ev)return;const live=game.state==='battle'||game.state==='shoot';
+  if(ev.type==='spin'){floorUniforms.uRot.value+=ev.dir*0.55*dt;}
+  else if(ev.type==='mag'){ev.a+=dt*0.28;ev.x=Math.cos(ev.a)*4.3;ev.z=Math.sin(ev.a*1.3)*4.3;
+    const y=floorY(ev.x,ev.z)+0.08,pu=0.75+0.25*Math.sin(performance.now()*0.008);
+    magRing.visible=magRing2.visible=live;magRing.position.set(ev.x,y,ev.z);magRing.scale.setScalar(ev.r);magRing.material.opacity=0.55*pu;
+    magRing2.position.set(ev.x,y+0.01,ev.z);magRing2.scale.setScalar(ev.r*(1.2+0.6*((performance.now()*0.0012)%1)));magRing2.rotation.y+=dt*2;
+    if(live&&Math.random()<0.4){const a=Math.random()*TAU,rr=ev.r*rand(0.3,1);emit(ev.x+Math.cos(a)*rr,y+0.1,ev.z+Math.sin(a)*rr,-Math.cos(a)*2,rand(0.5,1.5),-Math.sin(a)*2,C.purple,0.22,0.5,0,1);}}
+  else if(ev.type==='item'){
+    if(game.state==='battle'){ev.next-=dt;if(ev.next<=0&&ev.items.length<2){spawnItem();ev.next=rand(5,7);}}
+    for(let i=ev.items.length-1;i>=0;i--){const it=ev.items[i];it.ph+=dt;it.m.rotation.y+=dt*2.5;it.m.position.y=floorY(it.x,it.z)+0.7+Math.sin(it.ph*3)*0.12;
+      it.r.scale.setScalar(1+0.15*Math.sin(it.ph*5));
+      for(const t of tops){if(t.state!=='spin'||t.hanging)continue;if(Math.hypot(t.x-it.x,t.z-it.z)<t.st.rad+0.45){pickItem(t,it);scene.remove(it.m);it.m.material.dispose();scene.remove(it.r);it.r.material.dispose();ev.items.splice(i,1);break;}}}
+  }
+}
+function eventForce(t,dt){   // returns [ax,az] added in stepTop
+  const ev=game.ev;if(!ev)return null;
+  if(ev.type==='spin'){const r=Math.hypot(t.x,t.z)||1e-4,k=ev.dir*(1.0+0.32*r);return [-t.z/r*k,t.x/r*k];}
+  if(ev.type==='mag'){const dx=ev.x-t.x,dz=ev.z-t.z,d=Math.hypot(dx,dz)||1e-4;if(d>3.6)return null;const k=7*(1-d/3.6);if(d<ev.r)t.rpm-=0.035*dt;return [dx/d*k,dz/d*k];}
+  return null;
+}
 function cine(type,x,z,o){
   o=o||{};const pri={hit:1,just:2,ult:3,finish:4}[type];
   if(game.cine&&game.cine.pri>pri)return;
   if(type!=='finish'&&game.cineCD>0&&!(game.cine&&pri>game.cine.pri))return;
+  if(type==='hit'&&game.cineHitUsed)return;
   const toCam=Math.atan2(cam.pos.x-x,cam.pos.z-z);
   game.cine={type,pri,x,z,follow:o.follow||null,pair:o.pair||null,t:o.dur||1.1,dur:o.dur||1.1,ts:o.ts||0.15,
     a0:toCam+(o.side===undefined?(Math.random()<0.5?0.9:-0.9):o.side),sweep:(o.sweep||1.2)*(Math.random()<0.5?1:-1),
     r0:o.r0||3.6,r1:o.r1||4.8,h0:o.h0||1.0,h1:o.h1||2.0,snap:true};
-  game.cineCD=type==='finish'?0:3;
+  game.cineCD=type==='finish'?0:9;if(type==='hit')game.cineHitUsed=true;
   if(o.bars!==false)$('lbox').classList.add('on');
 }
 function drawFx2(rdt){
@@ -1124,7 +1189,7 @@ function startMatch(){
   startRound();
 }
 function startRound(){
-  game.round++;game.state='shoot';game.sudden=false;game.battleTime=0;game.clash=null;game.cliff=null;game.focus=null;game.cine=null;game.cineCD=0;$('lbox').classList.remove('on');game.clashCD=2.5;game.fbCD=0;game.shootGo=false;game.railFlash=0;game.pending=null;game.orbit=null;
+  game.round++;game.state='shoot';game.sudden=false;game.battleTime=0;game.clash=null;game.cliff=null;game.focus=null;game.cine=null;game.cineCD=0;game.cineHitUsed=false;$('lbox').classList.remove('on');game.clashCD=2.5;game.fbCD=0;game.shootGo=false;game.railFlash=0;game.pending=null;game.orbit=null;
   fx.fb=0;fx.burstSlow=0;fx.critSlow=0;fx.hitstop=0;floorUniforms.uDanger.value=0;Snd.setBgm('battle');
   clearDebris();resetWalls();setVig('');hideMashUI();$('cliffUI').className='layer';
   $('roundTxt').textContent='ROUND '+game.round;$('timer').className='';
@@ -1140,7 +1205,9 @@ function startRound(){
     $('gr'+p).textContent='';
   }
   const T=game.round===1?2.1:1.4;game.introT=game.introDur=T;
+  tops.forEach(t=>t.powerT=0);pickEvent();
   bigText('ROUND '+game.round,'rnd');showVS();
+  if(game.ev)after(game.introT+2.0,()=>popup('EVENT!','c-info',-1,EVENTS[game.ev.type].name+' · '+EVENTS[game.ev.type].desc));
   const c0=players[0].cfg,c1=players[1].cfg;
   
   after(T,()=>{$('vs').classList.remove('on');bigText('3','cnt');Snd.beep(660);Voice.say('쓰리',2);});
@@ -1207,7 +1274,7 @@ function matchEnd(w){
   if(DEMO)after(3,()=>startMatch());
 }
 function toLobby(){
-  game.state='lobby';game.timers=[];game.clash=null;game.cliff=null;game.focus=null;game.cine=null;$('lbox').classList.remove('on');
+  game.state='lobby';game.timers=[];clearEventObjs();game.ev=null;floorUniforms.uRot.value=0;$('evTxt').textContent='';game.clash=null;game.cliff=null;game.focus=null;game.cine=null;$('lbox').classList.remove('on');
   $('result').classList.remove('on');$('lobby').classList.remove('hide');
   ['scorebox','pp0','pp1','ctrl0','ctrl1'].forEach(id=>$(id).classList.add('hide'));
   hideMashUI();$('cliffUI').className='layer';setVig('');clearDebris();resetWalls();floorUniforms.uDanger.value=0;game.pending=null;game.orbit=null;$('vs').classList.remove('on');
@@ -1234,6 +1301,7 @@ function stepTop(t,dt){
   t.wob+=dt;const jf=(s.jit+t.unstable*3.2)*(0.5+rp*0.5);
   ax+=(Math.sin(t.wob*3.1+t.p*2)*1.4+Math.sin(t.wob*7.3)*0.6)*jf;az+=(Math.cos(t.wob*2.7+t.p)*1.4+Math.cos(t.wob*6.1)*0.6)*jf;
   const tk=TILT*(t.limit?1.5:1);ax+=pl.tilt.x*tk;az+=pl.tilt.y*tk;
+  const evf=eventForce(t,dt);if(evf){ax+=evf[0];az+=evf[1];}
   if(t.dashPhase===1){t.dashT-=dt;const sp=Math.hypot(t.vx,t.vz)||1;ax+=t.vx/sp*48;az+=t.vz/sp*48;
     // anti pocket-suicide: leave the rail early if a pocket / broken wall lies just ahead
     const px=t.x+t.vx*0.14,pz=t.z+t.vz*0.14;
@@ -1295,7 +1363,7 @@ function collide(dt){
   else rub(a,b,dt,nx,nz);
 }
 function outMul(t){return (t.limit?2:1)*(t.dashing>0?1.25:1)*(t.st.type==='attack'?1.15:1)*t.st.power;}
-function dmgOut(t){const u=players[t.p].ult;return t.st.dmgMul*(t.limit?2:1)*(t.dashing>0?1.35:1)*(u&&u.type==='storm'?1.3:1);}
+function dmgOut(t){const u=players[t.p].ult;return t.st.dmgMul*(t.limit?2:1)*(t.dashing>0?1.35:1)*(u&&u.type==='storm'?1.3:1)*(t.powerT>0?1.5:1);}
 function applyBurstDmg(t,d){
   if(d<=0||t.state!=='spin')return;
   const step=t.burstMax/t.st.clicks,before=Math.ceil(t.burst/step-1e-6);
@@ -1365,10 +1433,10 @@ function resolveHit(a,b,nx,nz,vn){
   if(just===0||just===1)justImpact(just,cx,cy,cz,perfect);
   else if(just===2){fx.invertT=0.06;fx.hitstop=0.12;lightning(cx,cy,cz);Snd.thunder();shake(1.4);}
   if(just<0&&vn>8)speedLines(null,0.6);
-  if(vn>16&&just<0&&game.popCD<=0){popup('CRITICAL HIT!','c-warn',-1);game.popCD=1.2;cine('hit',cx,cz,{pair:[a,b],dur:1.0,ts:0.14,r0:3.6,r1:4.8,h0:0.9,h1:1.8});}
+  if(vn>16&&just<0&&game.popCD<=0){popup('CRITICAL HIT!','c-warn',-1);game.popCD=1.2;if(vn>22)cine('hit',cx,cz,{pair:[a,b],dur:0.75,ts:0.18,r0:3.6,r1:4.8,h0:0.9,h1:1.8});}
 }
 function justImpact(p,cx,cy,cz,perfect){
-  cine('just',cx,cz,{pair:[tops[0],tops[1]],dur:perfect?1.3:1.05,ts:0.12,sweep:1.6,r0:3.6,r1:5,h0:0.9,h1:1.9});
+  if(perfect)cine('just',cx,cz,{pair:[tops[0],tops[1]],dur:0.9,ts:0.15,sweep:1.4,r0:3.6,r1:5,h0:0.9,h1:1.9});
   fx.invertT=0.075;fx.darkT=0.17;fx.hitstop=Math.max(fx.hitstop,0.15);focusAt(cx,cy,cz);anime.speed=1;anime.col='255,210,63';anime.roll+=(p?-1:1)*0.1;
   lightning(cx,cy,cz);Snd.thunder();shake(1.7);
   shock(cx,cy-0.5,cz,0xffd23f,7,0.6);shock(cx,cy-0.5,cz,0xffffff,4,0.4);
@@ -1460,7 +1528,7 @@ function fallOut(t,nx,nz){
   if(t.state!=='spin')return;
   const w=walls[segAt(Math.atan2(nz,nx))],x=w.ptype===2;
   t.state='fall';t.fall={vx:nx*4.5+t.vx*0.25,vz:nz*4.5+t.vz*0.25,vy:3.2};t.y=floorY(t.x,t.z);
-  cine('finish',nx*(R-1.2),nz*(R-1.2),{dur:1.4,ts:0.3,side:0,sweep:0.5,r0:3.2,r1:4.2,h0:1.2,h1:2.4});
+  if(walls[segAt(Math.atan2(nz,nx))].ptype===2)cine('finish',nx*(R-1.2),nz*(R-1.2),{dur:1.0,ts:0.35,side:0,sweep:0.5,r0:3.2,r1:4.2,h0:1.2,h1:2.4});
   Snd.fall();Snd.pocket(x);shake(x?1.1:0.6);sparks(t.x,t.y+0.3,t.z,x?60:30,x?[C.gold,C.orange,C.white]:[PC[t.p],C.white],x?9:6,0.8);
   if(x){shock(t.x,t.y,t.z,0xffa020,6,0.6);flashScreen(0.3);}
   finishRound(t,x?'xtreme':'over');
@@ -1469,7 +1537,7 @@ function fallOut(t,nx,nz){
 /* ---------- BURST ---------- */
 function doBurst(t){
   t.state='burst';const m=t.mesh;const y=floorY(t.x,t.z);
-  fx.burstSlow=1.35;cine('finish',t.x,t.z,{dur:1.8,ts:0.2,r0:4.2,r1:6.8,h0:1.2,h1:3.4,sweep:1.1});
+  fx.burstSlow=1.35;cine('finish',t.x,t.z,{dur:1.3,ts:0.22,r0:4.2,r1:6.8,h0:1.2,h1:3.4,sweep:1.1});
   const parts=[m.blade,m.rat,m.bit];
   parts.forEach((part,i)=>{scene.attach(part);const a=Math.random()*TAU,s=rand(5,10);addDebris(part,Math.cos(a)*s+t.vx*0.3,rand(7,12)-i*1.5,Math.sin(a)*s+t.vz*0.3,30,false,true);});
   m.blur.visible=false;
@@ -1486,7 +1554,7 @@ function limitBreak(p){
   const m=t.mesh;scene.attach(m.ring);addDebris(m.ring,rand(-5,5),10,rand(-5,5),2.5,false);
   m.mCol.emissive.setHex(0xff2000);m.mCol.emissiveIntensity=0.9;m.mGem.emissive.setHex(0xff0000);m.mGem.color.setHex(0xff3000);m.mGem.emissiveIntensity=2;
   trails[p].mat.uniforms.uColor.value.setHex(0xff3010);
-  popup('LIMIT BREAK!!','c-limit',-1,'공격력·속도 2배 / 버스트 체력 1%');cine('ult',t.x,t.z,{follow:t,dur:1.1,ts:0.15,h0:1.0,h1:2.6,r0:3.8,r1:5.2});
+  popup('LIMIT BREAK!!','c-limit',-1,'공격력·속도 2배 / 버스트 체력 1%');cine('ult',t.x,t.z,{follow:t,dur:0.8,ts:0.2,h0:1.0,h1:2.6,r0:3.8,r1:5.2});
   Snd.limit();fx.lb=0.5;fx.hitstop=0.1;shake(1);
   const y=floorY(t.x,t.z);shock(t.x,y,t.z,0xff2000,6,0.6);shock(t.x,y,t.z,0xffa000,3.5,0.4);
   sparks(t.x,y+0.6,t.z,70,[C.red,C.orange,C.gold],12,0.9);
@@ -1544,7 +1612,7 @@ function ultimate(p){
   const pl=players[p],t=tops[p],o=tops[1-p],U=BLADES[t.st.blade].ult;pl.sp=0;pl.spReady=false;
   const y=floorY(t.x,t.z);
   fx.hitstop=Math.max(fx.hitstop,0.12);flashScreen(0.4);shake(1.1);Snd.ult();
-  popup(U.name+'!!','c-limit',-1,sideName(p)+' 필살기');cine('ult',t.x,t.z,{follow:t,dur:1.3,ts:0.15,h0:1.0,h1:2.8,r0:3.8,r1:5.4,sweep:1.8});
+  popup(U.name+'!!','c-limit',-1,sideName(p)+' 필살기');cine('ult',t.x,t.z,{follow:t,dur:0.9,ts:0.2,h0:1.0,h1:2.8,r0:3.8,r1:5.4,sweep:1.5});
   shock(t.x,y,t.z,PCOL[p],7,0.6);shock(t.x,y,t.z,0xffffff,4,0.4);
   sparks(t.x,y+0.6,t.z,70,[PC[p],C.white,C.gold],13,0.9);streaks(t.x,y+0.5,t.z,30,[PC[p],C.gold,C.white],14);
   if(U.kind==='storm'){pl.ult={type:'storm',n:U.n,n0:U.n,spd:U.spd,t:0.05,name:U.name};}
@@ -1594,6 +1662,8 @@ function aiUpdate(dt,rdt){
       const aggro=t.st.type==='attack'||t.st.bitAggro||t.limit;
       let vx,vz;
       if(aggro&&o.state==='spin'){vx=o.x-t.x;vz=o.z-t.z;}else{vx=-t.x+(o.x-t.x)*0.15;vz=-t.z+(o.z-t.z)*0.15;}
+      if(game.ev&&game.ev.type==='item'&&game.ev.items.length&&Math.random()<0.55){const it=game.ev.items[0];vx=it.x-t.x;vz=it.z-t.z;}
+      if(game.ev&&game.ev.type==='mag'&&Math.hypot(game.ev.x-t.x,game.ev.z-t.z)<3.4){vx=t.x-game.ev.x;vz=t.z-game.ev.z;}
       const l=Math.hypot(vx,vz)||1;const m=aggro?rand(0.5,0.95):rand(0.3,0.7);S.tx=vx/l*m+rand(-0.25,0.25);S.ty=vz/l*m+rand(-0.25,0.25);
     }
     pl.tilt.x+=(S.tx-pl.tilt.x)*Math.min(1,rdt*5);pl.tilt.y+=(S.ty-pl.tilt.y)*Math.min(1,rdt*5);
@@ -1632,6 +1702,7 @@ function update(dt,rdt){
     if(dt>0){const n=Math.max(1,Math.ceil(dt/0.006)),h=dt/n;for(let k=0;k<n;k++){stepTop(tops[0],h);stepTop(tops[1],h);collide(h);}}
   }
   if(game.cliff)updateCliff(dt,rdt);
+  updateEvent(dt);for(const t of tops)if(t.powerT>0)t.powerT-=dt;
   if(game.pending){game.pending.t-=dt;if(game.pending.t<=0)resolveFinish();}
   if(game.state==='shoot'&&tops[0].state==='spin'&&tops[1].state==='spin'){game.state='battle';game.battleTime=0;}
   if(game.state==='battle'){
@@ -1706,6 +1777,7 @@ function syncTops(dt,rdt){
     // ambient particles
     if(t.state==='spin'&&dt>0){
       if(t.dashPhase===1)for(let i=0;i<3;i++)emit(t.x,fy+0.1,t.z,-t.vx*0.2+rand(-2,2),rand(1,4),-t.vz*0.2+rand(-2,2),i%2?C.cyan:C.white,rand(0.15,0.3),rand(0.2,0.45),1,1);
+      if(t.powerT>0&&Math.random()<0.6)emit(t.x+rand(-0.5,0.5),fy+0.7,t.z+rand(-0.5,0.5),0,rand(1.5,3),0,C.red,rand(0.25,0.4),0.35,-0.1,1);
       if(t.limit&&Math.random()<0.8)emit(t.x+rand(-0.6,0.6),fy+0.6,t.z+rand(-0.6,0.6),rand(-0.5,0.5),rand(2,4),rand(-0.5,0.5),Math.random()<0.5?C.red:C.orange,rand(0.3,0.55),rand(0.3,0.6),-0.15,1);
       if(t.rpm<0.25&&Math.random()<0.3)emit(t.x,fy+0.05,t.z,rand(-2,2),rand(0.5,2),rand(-2,2),C.gold,0.12,0.3,1,1);
       if(t.st.bitAggro&&sp>6&&Math.random()<0.25)emit(t.x,fy+0.05,t.z,rand(-1,1),rand(0.3,1),rand(-1,1),PC[p],0.14,0.35,1,1);
@@ -1840,6 +1912,7 @@ function buildLobby(){
   document.querySelectorAll('#lobby [data-slot]').forEach(b=>b.addEventListener('click',()=>cycle(+b.dataset.p,b.dataset.slot,+b.dataset.dir)));
   document.querySelectorAll('#lobby [data-pp]').forEach(b=>b.addEventListener('click',()=>cyclePreset(+b.dataset.pp,+b.dataset.pd)));
   document.querySelectorAll('#lobby [data-rand]').forEach(b=>b.addEventListener('click',()=>{const p=+b.dataset.rand;for(const [slot,,tb] of SLOTS){const k=Object.keys(tb);players[p].cfg[slot]=k[Math.random()*k.length|0];}Snd.ui();buildTopFor(p);tops[p].state='lobby';refreshLobby();}));
+  document.querySelectorAll('#lobby [data-ev]').forEach(b=>b.addEventListener('click',()=>{const k=b.dataset.ev;evOpts[k]=!evOpts[k];try{localStorage.setItem('bey_events',JSON.stringify(evOpts));}catch(e){}Snd.ui();refreshLobby();}));
   $('mPvp').addEventListener('click',()=>{game.mode='pvp';Snd.ui();refreshLobby();});
   $('mAi').addEventListener('click',()=>{game.mode='ai';Snd.ui();refreshLobby();});
   $('btnStart').addEventListener('click',()=>{Snd.unlock();Snd.go();startMatch();});
@@ -1849,6 +1922,7 @@ function buildLobby(){
 function cyclePreset(p,dir){const pl=players[p];pl.preset=(pl.preset+dir+PRESETS.length)%PRESETS.length;pl.cfg=Object.assign({},PRESETS[pl.preset].cfg);Snd.ui();buildTopFor(p);tops[p].state='lobby';refreshLobby();}
 function cycle(p,slot,dir){const tb=SLOTS.find(s=>s[0]===slot)[2];const k=Object.keys(tb);const i=k.indexOf(players[p].cfg[slot]);players[p].cfg[slot]=k[(i+dir+k.length)%k.length];Snd.ui();buildTopFor(p);tops[p].state='lobby';refreshLobby();}
 function refreshLobby(){
+  document.querySelectorAll('#lobby [data-ev]').forEach(b=>b.classList.toggle('on',!!evOpts[b.dataset.ev]));
   $('mPvp').classList.toggle('on',game.mode==='pvp');$('mAi').classList.toggle('on',game.mode==='ai');
   for(let p=0;p<2;p++){
     const c=players[p].cfg;$('lpn'+p).textContent=p?(game.mode==='ai'?'AI (CPU)':'2P'):'1P';
@@ -2006,7 +2080,7 @@ for(let p=0;p<2;p++){buildTopFor(p);tops[p].state='lobby';}
 resetWalls();refreshLobby();updSndBtn();Snd.setBgm('lobby');
 // OD button label span
 for(let p=0;p<2;p++){const od=$('od'+p);od.innerHTML='<span id="od'+p+'l">OVERDRIVE</span><small>'+(p?'L':'D')+'</small>';}
-window.__bey={game,players,tops,startMatch,fx,update,animTop,startClash,startCliff,finishRound,press,releaseMash,addSP,anime};
+window.__bey={evOpts,pickEvent,game,players,tops,startMatch,fx,update,animTop,startClash,startCliff,finishRound,press,releaseMash,addSP,anime};
 if(DEMO){game.mode='ai';setTimeout(startMatch,300);}
 requestAnimationFrame(loop);
 })();
