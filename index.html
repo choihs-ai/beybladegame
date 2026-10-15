@@ -26,6 +26,8 @@ button{font-family:inherit;touch-action:none;cursor:pointer;-webkit-user-select:
 #scoreRow{display:flex;align-items:center;gap:10px}
 .pips{display:flex;gap:4px}
 .pip{width:15px;height:15px;border-radius:3px;transform:skewX(-14deg);background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.28);transition:all .25s}
+#scorebox.many .pip{width:9px;height:13px}
+#scorebox.many .pips{gap:3px}
 #pips0 .pip.on{background:var(--p1);box-shadow:0 0 10px var(--p1)}
 #pips1 .pip.on{background:var(--p2);box-shadow:0 0 10px var(--p2)}
 .pip.pop{animation:pipPop .5s}
@@ -35,8 +37,8 @@ button{font-family:inherit;touch-action:none;cursor:pointer;-webkit-user-select:
 #evTxt{font-size:11px;font-weight:900;letter-spacing:1px;color:#d9b8ff;white-space:nowrap;text-shadow:0 0 8px #7a3cff}
 #evTxt:empty{display:none}
 .evrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;font-size:12px;font-weight:900;max-width:420px}
-.evrow span{width:100%;text-align:center;letter-spacing:2px;opacity:.85}
-.evrow button{padding:7px 11px;border-radius:9px;border:2px solid rgba(255,255,255,.28);background:rgba(10,14,30,.8);color:rgba(255,255,255,.55);font-weight:900;font-size:13px}
+.evrow span{letter-spacing:1px;opacity:.85;margin-right:2px}
+.evrow button{padding:5px 9px;border-radius:9px;border:2px solid rgba(255,255,255,.28);background:rgba(10,14,30,.8);color:rgba(255,255,255,.55);font-weight:900;font-size:13px}
 .evrow button.on{color:#fff;background:linear-gradient(180deg,#8a4cff,#3a1580);border-color:#fff;box-shadow:0 0 14px rgba(138,76,255,.7)}
 #timer.sd{color:#ff3a3a;animation:blink .35s infinite;opacity:1}
 #roundTxt{font-size:10px;letter-spacing:3px;opacity:.6;font-weight:800}
@@ -340,10 +342,11 @@ button{font-family:inherit;touch-action:none;cursor:pointer;-webkit-user-select:
   <div id="lcenter">
     <div><h1>BEYBLADE<br><span>OVERDRIVE</span></h1><div class="sub">DOPAMINE EDITION</div></div>
     <div class="lbottom">
-      <div class="evrow"><span>🎪 스타디움 이벤트 (켠 것 중 라운드마다 하나)</span><button data-ev="spin">🌀 회전 바닥</button><button data-ev="mag">🧲 자기장</button><button data-ev="item">💊 아이템 캡슐</button></div>
+      <div class="evrow"><span>🎪 이벤트</span><button data-ev="spin">🌀 회전 바닥</button><button data-ev="mag">🧲 자기장</button><button data-ev="item">💊 아이템 캡슐</button></div>
+      <div class="evrow"><span>🏆 목표</span><button data-win="4">4점 · 공식</button><button data-win="7">7점</button><button data-win="10">10점</button></div>
       <div class="modes"><button data-mode="pvp" id="mPvp">👥 2P 대전</button><button data-mode="ai" id="mAi">🤖 VS AI</button></div>
       <button id="btnStart">BATTLE START</button>
-      <div class="keys">베이블레이드 X 룰 · 4점 선취 · 스핀 1 · 오버 2 · 버스트 2 · 익스트림 3<br>⌨ 1P: A 임팩트 · S 슛/연타/꾹=차지대시 · D 필살기·리미트 (조준 A/D)<br>⌨ 2P: J 임팩트 · K 슛/연타/꾹=차지대시 · L 필살기·리미트 (조준 J/L)<br>금색 링이 닫힐 때 IMPACT = PERFECT!<br>로비: Q/U 추천 조합 · A/S/D · J/K/L 파츠 · Enter 시작 · M 모드</div>
+      <div class="keys">베이블레이드 X 룰 · 목표 점수 선취 · 스핀 1 · 오버 2 · 버스트 2 · 익스트림 3<br>⌨ 1P: A 임팩트 · S 슛/연타/꾹=차지대시 · D 필살기·리미트 (조준 A/D)<br>⌨ 2P: J 임팩트 · K 슛/연타/꾹=차지대시 · L 필살기·리미트 (조준 J/L)<br>금색 링이 닫힐 때 IMPACT = PERFECT!<br>로비: Q/U 추천 조합 · A/S/D · J/K/L 파츠 · Enter 시작 · M 모드</div>
     </div>
   </div>
   <div class="lpanel" id="lp1"></div>
@@ -372,7 +375,8 @@ const RAIL_R=9.0, RAIL_IN=8.55, RAIL_OUT=9.45;  // X-Line 기어 레일 (외곽)
 const SEGS=24;
 // 포켓: 2 = 익스트림 존(앞쪽 넓은 포켓, 3점) · 1 = 오버 존(뒤쪽 좌우, 2점)
 const POCKET_TYPE=new Array(SEGS).fill(0);[5,6,7].forEach(i=>POCKET_TYPE[i]=2);[15,21].forEach(i=>POCKET_TYPE[i]=1);
-const SUDDEN_T=25, WIN_SCORE=4;
+const SUDDEN_T=25;let WIN_SCORE=4;
+try{const w=+localStorage.getItem('bey_win');if([4,7,10].includes(w))WIN_SCORE=w;}catch(e){}
 const TILT=6.5;
 const OC_LO=0.86, OC_HI=0.95, GAUGE_T=1.05;
 const surfY=r=>A*r*r;
@@ -748,7 +752,7 @@ function signTex(text,col){return canvasTex(256,(g,s)=>{g.clearRect(0,0,s,s);g.f
 /* ---------- Walls ---------- */
 const walls=[];
 const segW=2*(R+0.22)*Math.tan(Math.PI/SEGS)+0.02;
-const WALL_HP=34;
+const WALL_HP=60;
 const wallGeo=new THREE.BoxGeometry(segW,1.0,0.24),edgeGeo=new THREE.BoxGeometry(segW,0.08,0.3);
 for(let i=0;i<SEGS;i++){
   const a=i*TAU/SEGS,pt=POCKET_TYPE[i];
@@ -1185,6 +1189,8 @@ function startMatch(){
   $('pl1name').textContent=players[1].ai?'AI':'2P';
   for(let p=0;p<2;p++){const c=players[p].cfg;$('pn'+p).textContent=comboName(c);}
   Snd.setBgm('battle');
+  for(let p=0;p<2;p++)$('pips'+p).innerHTML='<i class="pip"></i>'.repeat(WIN_SCORE);
+  $('scorebox').classList.toggle('many',WIN_SCORE>4);
   updateScore(false);
   startRound();
 }
@@ -1259,7 +1265,7 @@ function resolveFinish(){
   after(pf.type==='burst'?3.6:3.1,()=>{if(game.score[w]>=WIN_SCORE)matchEnd(w);else startRound();});
 }
 function updateScore(anim){
-  for(let p=0;p<2;p++){$('sc'+p).textContent=game.score[p];const pips=$('pips'+p).children;for(let i=0;i<4;i++){const on=i<game.score[p];if(on&&!pips[i].classList.contains('on')&&anim){pips[i].classList.add('pop');setTimeout(()=>pips[i].classList.remove('pop'),500);}pips[i].classList.toggle('on',on);}}
+  for(let p=0;p<2;p++){$('sc'+p).textContent=game.score[p];const pips=$('pips'+p).children;for(let i=0;i<pips.length;i++){const on=i<game.score[p];if(on&&!pips[i].classList.contains('on')&&anim){pips[i].classList.add('pop');setTimeout(()=>pips[i].classList.remove('pop'),500);}pips[i].classList.toggle('on',on);}}
 }
 function matchEnd(w){
   game.state='match';game.cine=null;$('lbox').classList.remove('on');Snd.setBgm('off');Snd.fanfare();
@@ -1308,7 +1314,7 @@ function stepTop(t,dt){
     if(t.dashT<=0||!walls[segAt(Math.atan2(pz,px))].alive)fling(t);}
   t.vx+=ax*dt;t.vz+=az*dt;
   const damp=s.damp*(t.dashing>0?0.2:1)*(t.dashPhase===1?0.2:1)+(pl.charging?1.4:0);const k=Math.exp(-damp*dt);t.vx*=k;t.vz*=k;
-  let sp=Math.hypot(t.vx,t.vz);const vmax=t.limit?40:32;if(sp>vmax){t.vx*=vmax/sp;t.vz*=vmax/sp;sp=vmax;}
+  let sp=Math.hypot(t.vx,t.vz);const vmax=t.limit?36:28;if(sp>vmax){t.vx*=vmax/sp;t.vz*=vmax/sp;sp=vmax;}
   t.x+=t.vx*dt;t.z+=t.vz*dt;
   if(t.dashing>0)t.dashing-=dt;if(t.dashCD>0)t.dashCD-=dt;if(t.unstable>0)t.unstable=Math.max(0,t.unstable-dt*0.12);
   t.rpm-=dt*s.decay*(game.sudden?1.6:1)*(1+sp*(s.bitAggro?0.02:0.008))*(t.limit?1.3:1);
@@ -1324,7 +1330,7 @@ function fling(t,opt){
     let l=Math.hypot(tx,tz)||1;tx/=l;tz/=l;
     if(tx*inx+tz*inz<0.3){tx=inx*0.85+tx*0.15;tz=inz*0.85+tz*0.15;}   // never fling outward
     ang=Math.atan2(tz,tx)+rand(-0.15,0.15);}
-  if(spd===undefined)spd=clamp(12.5*t.st.dashMul*(t.limit?2:1)*(0.6+0.4*Math.min(t.rpm,1.5)),8,t.limit?40:30);
+  if(spd===undefined)spd=clamp(10.5*t.st.dashMul*(t.limit?2:1)*(0.6+0.4*Math.min(t.rpm,1.5)),7,t.limit?34:25);
   t.vx=Math.cos(ang)*spd;t.vz=Math.sin(ang)*spd;t.dashing=opt.dashing||0.75;t.dashCD=Math.max(t.dashCD,opt.ang!==undefined?1.2:2.5);   // rail re-entry cooldown
   const y=floorY(t.x,t.z);
   shock(t.x,y,t.z,PCOL[t.p],3.2,0.45);sparks(t.x,y+0.3,t.z,26,[PC[t.p],C.white,C.cyan],8,0.5);
@@ -1336,6 +1342,8 @@ function edge(t){
   const nx=t.x/r,nz=t.z/r,vr=t.vx*nx+t.vz*nz;
   const w=walls[segAt(Math.atan2(t.z,t.x))];
   if(w.alive){t.x=nx*lim;t.z=nz*lim;if(vr>0){t.vx-=1.55*vr*nx;t.vz-=1.55*vr*nz;wallHit(w,t,vr);}return;}
+  // pocket / broken-wall lip: drifting tops roll back in, only real knock-outs (fast outward) go over
+  if(r<R+0.25&&vr<6.5){t.x=nx*Math.min(r,lim+0.25);t.z=nz*Math.min(r,lim+0.25);if(vr>0){t.vx-=1.25*vr*nx;t.vz-=1.25*vr*nz;}return;}
   if(r>R+0.3){
     if(game.cliff){if(game.cliff.t!==t){t.x=nx*(R+0.3);t.z=nz*(R+0.3);if(vr>0){t.vx-=1.3*vr*nx;t.vz-=1.3*vr*nz;}}return;}
     if(game.state==='battle'&&!game.pending&&!players[t.p].cliffUsed)startCliff(t,nx,nz);else fallOut(t,nx,nz);
@@ -1367,7 +1375,7 @@ function dmgOut(t){const u=players[t.p].ult;return t.st.dmgMul*(t.limit?2:1)*(t.
 function applyBurstDmg(t,d){
   if(d<=0||t.state!=='spin')return;
   const step=t.burstMax/t.st.clicks,before=Math.ceil(t.burst/step-1e-6);
-  if(t.limit)t.burst=0;else t.burst=Math.max(0,t.burst-Math.min(d,t.burstMax*0.5));
+  if(t.limit)t.burst=0;else t.burst=Math.max(0,t.burst-Math.min(d,t.burstMax*0.34));
   const lost=before-Math.ceil(t.burst/step-1e-6);
   if(lost>0&&t.burst>0){t.clicks+=lost;Snd.ratchet(lost);}
   const el=$('bstb'+t.p);el.classList.remove('hit');void el.offsetWidth;el.classList.add('hit');
@@ -1380,11 +1388,11 @@ function resolveHit(a,b,nx,nz,vn){
   // ---- CLASH (blade lock) ----
   if(!parA&&!parB&&vn>9&&va>2.5&&vb>2.5&&game.clashCD<=0&&game.state==='battle'&&Math.random()<0.65){startClash(nx,nz);return;}
   const same=a.st.spin===b.st.spin;
-  const e=0.72,ima=1/a.st.mass,imb=1/b.st.mass;
-  const J=(1+e)*vn/(ima+imb)+2.4*(a.rpm+b.rpm)*(same?1:0.45);
+  const e=0.62,ima=1/a.st.mass,imb=1/b.st.mass;
+  const J=(1+e)*vn/(ima+imb)+1.7*(a.rpm+b.rpm)*(same?1:0.45);
   const sd=game.sudden?2:1;
   let Ja=J*outMul(b)*a.st.knock*sd,Jb=J*outMul(a)*b.st.knock*sd;
-  let dA=Math.max(0,vn-2)*0.9*dmgOut(b)*a.st.recv,dB=Math.max(0,vn-2)*0.9*dmgOut(a)*b.st.recv;
+  let dA=Math.max(0,vn-2.5)*0.5*dmgOut(b)*a.st.recv,dB=Math.max(0,vn-2.5)*0.5*dmgOut(a)*b.st.recv;
   // Balance passive: RPM lead = ×1.25 damage dealt, RPM behind = ×0.75 damage taken
   if(a.st.type==='balance'){if(a.rpm>b.rpm)dB*=1.25;else dA*=0.75;}
   if(b.st.type==='balance'){if(b.rpm>a.rpm)dA*=1.25;else dB*=0.75;}
@@ -1392,8 +1400,8 @@ function resolveHit(a,b,nx,nz,vn){
   let just=-1;
   let perfect=false;
   if(parA&&parB){Ja*=1.6;Jb*=1.6;dA=0;dB=0;popup('DOUBLE IMPACT!!','c-just',-1);just=2;}
-  else if(parA){just=0;perfect=PARRY_WIN-pa.parryT<=0.08;const m=perfect?3:2.2;Ja*=0.12;dA=0;Jb*=m;dB=Math.max(dB*m,perfect?30:20);}
-  else if(parB){just=1;perfect=PARRY_WIN-pb.parryT<=0.08;const m=perfect?3:2.2;Jb*=0.12;dB=0;Ja*=m;dA=Math.max(dA*m,perfect?30:20);}
+  else if(parA){just=0;perfect=PARRY_WIN-pa.parryT<=0.08;const m=perfect?3:2.2;Ja*=0.12;dA=0;Jb*=m;dB=Math.max(dB*m,perfect?18:12);}
+  else if(parB){just=1;perfect=PARRY_WIN-pb.parryT<=0.08;const m=perfect?3:2.2;Jb*=0.12;dB=0;Ja*=m;dA=Math.max(dA*m,perfect?18:12);}
   if(players[0].ult&&players[0].ult.type==='fort')Ja*=0.4;
   if(players[1].ult&&players[1].ult.type==='fort')Jb*=0.4;
   // ---- Counter Shield (defense passive) ----
@@ -1410,9 +1418,9 @@ function resolveHit(a,b,nx,nz,vn){
   const tg=same?0.22*J:0,tx=-nz,tz=nx;
   a.vx+=(-nx*Ja+tx*tg*a.st.spin)*ima;a.vz+=(-nz*Ja+tz*tg*a.st.spin)*ima;
   b.vx+=(nx*Jb-tx*tg*b.st.spin)*imb;b.vz+=(nz*Jb-tz*tg*b.st.spin)*imb;
-  a.rpm-=0.0045*vn*(just===0?0:1);b.rpm-=0.0045*vn*(just===1?0:1);
+  a.rpm-=0.003*vn*(just===0?0:1);b.rpm-=0.003*vn*(just===1?0:1);
   applyBurstDmg(a,dA);applyBurstDmg(b,dB);
-  addSP(0,dB*0.9+dA*0.5);addSP(1,dA*0.9+dB*0.5);
+  addSP(0,dB*1.1+dA*0.6);addSP(1,dA*1.1+dB*0.6);
   if(dA>3&&just!==0)pa.combo=0;if(dB>3&&just!==1)pb.combo=0;
   if(just===0||just===1){const pl=players[just];pl.combo++;addSP(just,perfect?40:30);}
   if(parA){pa.parryT=0;pa.parryArmed=false;}if(parB){pb.parryT=0;pb.parryArmed=false;}
@@ -1490,10 +1498,10 @@ function endClash(){
     popup('DRAW!','c-info',-1,'양쪽 튕김');Snd.clang(1);shake(0.8);
   }else{
     const w=d>0?0:1,l=1-w,W=tops[w],L=tops[l],dir=w===0?1:-1;
-    const pw=Math.min(34,18+Math.abs(d)*1.4)*(W.limit?1.4:1)*(game.sudden?1.3:1);
+    const pw=Math.min(26,13+Math.abs(d)*1.1)*(W.limit?1.4:1)*(game.sudden?1.3:1);
     const ang=Math.atan2(nz*dir,nx*dir)+rand(-0.25,0.25);
     L.vx=Math.cos(ang)*pw;L.vz=Math.sin(ang)*pw;W.vx=-nx*dir*3;W.vz=-nz*dir*3;
-    applyBurstDmg(L,(14+Math.abs(d)*1.6)*W.st.dmgMul*0.6*(W.limit?2:1)*L.st.recv);
+    applyBurstDmg(L,(9+Math.abs(d)*1.0)*W.st.dmgMul*0.5*(W.limit?2:1)*L.st.recv);
     popup('CLASH WIN!!','c-clash',w,c.cnt[w]+' vs '+c.cnt[l]+' 연타');addSP(w,25);
     Snd.clang(1.5);Snd.dash();shake(1.5);fx.hitstop=0.12;flashScreen(0.4);
     shock(cx,cy-0.4,cz,PCOL[w],8,0.7);sparks(cx,cy,cz,80,[PC[w],C.white,C.gold],16,0.8);
@@ -1591,8 +1599,8 @@ function releaseMash(p,angOverride){
     else if(o.state==='spin')ang=Math.atan2(o.z-t.z,o.x-t.x);
     else ang=Math.atan2(-t.z,-t.x);
   }
-  const spd=clamp((8+11*c)*BLADES[t.st.blade].dashMul*(t.limit?2:1),8,t.limit?38:28);
-  t.rpm-=0.03+0.05*c;pl.cdash=1.8;
+  const spd=clamp((7+9*c)*BLADES[t.st.blade].dashMul*(t.limit?2:1),7,t.limit?32:24);
+  t.rpm-=0.02+0.03*c;pl.cdash=1.8;
   fling(t,{ang,spd,dashing:0.6,label:c>=0.99?'MAX CHARGE DASH!!':'CHARGE DASH!',cls:c>=0.99?'c-oc':'c-info'});
 }
 function pressOD(p){
@@ -1672,7 +1680,7 @@ function aiUpdate(dt,rdt){
     if(o.state==='spin'){
       const d=Math.hypot(o.x-t.x,o.z-t.z);
       if(pl.sp>=100&&!pl.ult){const uk=BLADES[t.st.blade].ult.kind,rng=uk==='storm'?8:(uk==='wave'?5:4.2);S.ultDelay-=dt;if(S.ultDelay<=0&&d<rng){pressOD(p);S.ultDelay=rand(0.2,1.2);}}
-      if(!pl.charging&&pl.cdash<=0&&d>3.5&&d<9&&Math.hypot(t.x,t.z)<7.5&&Math.hypot(o.x,o.z)<8&&Math.random()<dt*0.3){pressMash(p);S.chargeHold=rand(0.25,0.65);}
+      if(!pl.charging&&pl.cdash<=0&&d>3.5&&d<9&&Math.hypot(t.x,t.z)<7.5&&Math.hypot(o.x,o.z)<8&&Math.random()<dt*0.2){pressMash(p);S.chargeHold=rand(0.25,0.65);}
       else if(pl.charging){S.chargeHold-=rdt;if(S.chargeHold<=0)releaseMash(p,Math.atan2(o.z-t.z,o.x-t.x)+rand(-0.15,0.15));}
     }
   }
@@ -1913,6 +1921,7 @@ function buildLobby(){
   document.querySelectorAll('#lobby [data-pp]').forEach(b=>b.addEventListener('click',()=>cyclePreset(+b.dataset.pp,+b.dataset.pd)));
   document.querySelectorAll('#lobby [data-rand]').forEach(b=>b.addEventListener('click',()=>{const p=+b.dataset.rand;for(const [slot,,tb] of SLOTS){const k=Object.keys(tb);players[p].cfg[slot]=k[Math.random()*k.length|0];}Snd.ui();buildTopFor(p);tops[p].state='lobby';refreshLobby();}));
   document.querySelectorAll('#lobby [data-ev]').forEach(b=>b.addEventListener('click',()=>{const k=b.dataset.ev;evOpts[k]=!evOpts[k];try{localStorage.setItem('bey_events',JSON.stringify(evOpts));}catch(e){}Snd.ui();refreshLobby();}));
+  document.querySelectorAll('#lobby [data-win]').forEach(b=>b.addEventListener('click',()=>{WIN_SCORE=+b.dataset.win;try{localStorage.setItem('bey_win',WIN_SCORE);}catch(e){}Snd.ui();refreshLobby();}));
   $('mPvp').addEventListener('click',()=>{game.mode='pvp';Snd.ui();refreshLobby();});
   $('mAi').addEventListener('click',()=>{game.mode='ai';Snd.ui();refreshLobby();});
   $('btnStart').addEventListener('click',()=>{Snd.unlock();Snd.go();startMatch();});
@@ -1922,6 +1931,7 @@ function buildLobby(){
 function cyclePreset(p,dir){const pl=players[p];pl.preset=(pl.preset+dir+PRESETS.length)%PRESETS.length;pl.cfg=Object.assign({},PRESETS[pl.preset].cfg);Snd.ui();buildTopFor(p);tops[p].state='lobby';refreshLobby();}
 function cycle(p,slot,dir){const tb=SLOTS.find(s=>s[0]===slot)[2];const k=Object.keys(tb);const i=k.indexOf(players[p].cfg[slot]);players[p].cfg[slot]=k[(i+dir+k.length)%k.length];Snd.ui();buildTopFor(p);tops[p].state='lobby';refreshLobby();}
 function refreshLobby(){
+  document.querySelectorAll('#lobby [data-win]').forEach(b=>b.classList.toggle('on',+b.dataset.win===WIN_SCORE));
   document.querySelectorAll('#lobby [data-ev]').forEach(b=>b.classList.toggle('on',!!evOpts[b.dataset.ev]));
   $('mPvp').classList.toggle('on',game.mode==='pvp');$('mAi').classList.toggle('on',game.mode==='ai');
   for(let p=0;p<2;p++){
