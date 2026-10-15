@@ -576,7 +576,11 @@ const Snd=(function(){
 const Voice=(function(){
   const ss=window.speechSynthesis;let list=[],idx=0,curPrio=0,busyUntil=0,minorUntil=0,manual=false;
   // 자연스러운 음성(Enhanced/Premium/Neural/Google/Yuna 등)을 우선 선택
+  const MALE=/injoon|in-joon|인준|minjun|min-jun|민준|hyunsu|현수|jinho|진호|bongjin|봉진|gookmin|국민|seojun|서준|junho|준호|male|남성|siri.*(2|4)|voice ?(2|4)\b/i;
+  const FEMALE=/yuna|유나|sun-?hi|선희|heami|해미|seoyeon|서연|female|여성|jiyoon|지윤|google.*(한국|korean)/i;
+  const isMale=v=>MALE.test((v.name||'')+' '+(v.voiceURI||''))&&!FEMALE.test(v.name||'');
   function score(v){const n=(v.name||'')+' '+(v.voiceURI||'');let sc=0;
+    if(isMale(v))sc+=120;else if(FEMALE.test(n))sc-=20;
     if(/premium|enhanced|neural|natural|prem|향상|고급/i.test(n))sc+=50;
     if(/google|yuna|유나|sun-hi|sunhi|heami|해미|seoyeon/i.test(n))sc+=30;
     if(!v.localService)sc+=8;
@@ -590,7 +594,8 @@ const Voice=(function(){
   if(ss){pick();try{if(ss.addEventListener)ss.addEventListener('voiceschanged',pick);else ss.onvoiceschanged=pick;}catch(e){}}
   function speak(text,o){try{if(ss.speaking||ss.pending)ss.cancel();
     const u=new SpeechSynthesisUtterance(text),v=list[idx];if(v){u.voice=v;u.lang=v.lang;}else u.lang='ko-KR';
-    u.rate=o&&o.rate||1.02;u.pitch=o&&o.pitch||0.92;u.volume=1;ss.speak(u);}catch(e){}}
+    // 남성 음성이 없으면 톤을 크게 낮춰 남성에 가깝게
+    const male=v&&isMale(v);u.rate=(o&&o.rate||1.02)*(male?1:0.96);u.pitch=male?(o&&o.pitch||0.9):0.5;u.volume=1;ss.speak(u);}catch(e){}}
   return {
     prime(){if(!ss)return;try{const u=new SpeechSynthesisUtterance(' ');u.volume=0;ss.speak(u);}catch(e){}},
     say(text,prio){
@@ -603,7 +608,7 @@ const Voice=(function(){
     /* 🎙 버튼: 사용 가능한 한국어 음성을 순서대로 바꿔 들어보기 */
     next(){if(!ss)return '음성 합성을 지원하지 않는 브라우저';pick();if(!list.length)return '한국어 음성 없음';manual=true;idx=(idx+1)%list.length;
       try{localStorage.setItem('bey_voice',list[idx].voiceURI);}catch(e){}
-      speak('고 슛! 저스트 임팩트!',{rate:1.0,pitch:0.9});return list[idx].name+' ('+(idx+1)+'/'+list.length+')';},
+      speak('고 슛! 저스트 임팩트!',{rate:1.0,pitch:0.9});return list[idx].name+(isMale(list[idx])?' ♂':' (톤↓)')+' ('+(idx+1)+'/'+list.length+')';},
     stop(){if(ss)try{ss.cancel();}catch(e){}}
   };
 })();
