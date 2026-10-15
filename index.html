@@ -264,6 +264,8 @@ button{font-family:inherit;touch-action:none;cursor:pointer;-webkit-user-select:
     <div id="timer">READY</div>
   </div>
   <button id="btnSnd" class="tbtn pulse" title="사운드">🔇</button>
+  <button id="btnVoice" class="tbtn" title="아나운서 음성 바꾸기">🎙</button>
+  <div id="voiceTip" style="position:absolute;top:52px;right:0;max-width:60vw;font-size:11px;font-weight:800;background:rgba(10,14,30,.9);border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:4px 8px;display:none;white-space:nowrap"></div>
 </div>
 
 <div id="pp0" class="layer ppanel hide">
@@ -572,21 +574,36 @@ const Snd=(function(){
 
 /* ---------- Announcer (Speech Synthesis, Korean voice when available) ---------- */
 const Voice=(function(){
-  const ss=window.speechSynthesis;let voice=null,curPrio=0,busyUntil=0,minorUntil=0;
-  function pick(){if(!ss)return;try{const vs=ss.getVoices();voice=vs.find(v=>/ko[-_]KR/i.test(v.lang))||vs.find(v=>/^ko/i.test(v.lang))||null;}catch(e){}}
+  const ss=window.speechSynthesis;let list=[],idx=0,curPrio=0,busyUntil=0,minorUntil=0,manual=false;
+  // 자연스러운 음성(Enhanced/Premium/Neural/Google/Yuna 등)을 우선 선택
+  function score(v){const n=(v.name||'')+' '+(v.voiceURI||'');let sc=0;
+    if(/premium|enhanced|neural|natural|prem|향상|고급/i.test(n))sc+=50;
+    if(/google|yuna|유나|sun-hi|sunhi|heami|해미|seoyeon/i.test(n))sc+=30;
+    if(!v.localService)sc+=8;
+    if(/compact|espeak|robot|novelty|bad|zarvox|trinoids/i.test(n))sc-=60;
+    return sc;}
+  function pick(){if(!ss)return;try{const vs=ss.getVoices().filter(v=>/^ko/i.test(v.lang));
+    vs.sort((a,b)=>score(b)-score(a));
+    const prev=list[idx];list=vs;if(!manual||!prev)idx=0;else{const k=list.findIndex(v=>v.voiceURI===prev.voiceURI);idx=k<0?0:k;}
+    try{if(list[idx])localStorage.setItem('bey_voice',list[idx].voiceURI);}catch(e){}
+  }catch(e){}}
   if(ss){pick();try{if(ss.addEventListener)ss.addEventListener('voiceschanged',pick);else ss.onvoiceschanged=pick;}catch(e){}}
+  function speak(text,o){try{if(ss.speaking||ss.pending)ss.cancel();
+    const u=new SpeechSynthesisUtterance(text),v=list[idx];if(v){u.voice=v;u.lang=v.lang;}else u.lang='ko-KR';
+    u.rate=o&&o.rate||1.02;u.pitch=o&&o.pitch||0.92;u.volume=1;ss.speak(u);}catch(e){}}
   return {
     prime(){if(!ss)return;try{const u=new SpeechSynthesisUtterance(' ');u.volume=0;ss.speak(u);}catch(e){}},
     say(text,prio){
       if(!ss||!Snd.isOn()||!Snd.isUnlocked())return;prio=prio||1;const now=performance.now();
       if(prio<=1&&now<minorUntil)return;
       if(now<busyUntil&&prio<curPrio)return;
-      try{if(ss.speaking||ss.pending)ss.cancel();
-        const u=new SpeechSynthesisUtterance(text);if(voice){u.voice=voice;u.lang=voice.lang;}else u.lang='ko-KR';
-        u.rate=1.18;u.pitch=1.08;u.volume=1;ss.speak(u);
-        curPrio=prio;busyUntil=now+Math.min(2200,350+text.length*110);if(prio<=1)minorUntil=now+2600;Snd.duck();
-      }catch(e){}
+      speak(text,{rate:prio>=3?1.0:1.08,pitch:prio>=3?0.85:0.92});
+      curPrio=prio;busyUntil=now+Math.min(2200,350+text.length*110);if(prio<=1)minorUntil=now+2600;Snd.duck();
     },
+    /* 🎙 버튼: 사용 가능한 한국어 음성을 순서대로 바꿔 들어보기 */
+    next(){if(!ss)return '음성 합성을 지원하지 않는 브라우저';pick();if(!list.length)return '한국어 음성 없음';manual=true;idx=(idx+1)%list.length;
+      try{localStorage.setItem('bey_voice',list[idx].voiceURI);}catch(e){}
+      speak('고 슛! 저스트 임팩트!',{rate:1.0,pitch:0.9});return list[idx].name+' ('+(idx+1)+'/'+list.length+')';},
     stop(){if(ss)try{ss.cancel();}catch(e){}}
   };
 })();
@@ -1819,6 +1836,7 @@ window.addEventListener('blur',()=>heldKeys.clear());
 /* ---------- Fullscreen / Sound ---------- */
 function updSndBtn(){const b=$('btnSnd');const ok=Snd.isUnlocked();b.textContent=ok&&Snd.isOn()?'🔊':'🔇';b.classList.toggle('pulse',!ok);}
 $('btnSnd').addEventListener('click',()=>{if(!Snd.isUnlocked()){Snd.unlock();if(!Snd.isOn())Snd.toggle();}else{if(!Snd.toggle())Voice.stop();}Snd.ui();setTimeout(updSndBtn,60);});
+$('btnVoice').addEventListener('click',()=>{Snd.unlock();Voice.prime();setTimeout(()=>{const t=Voice.next(),el=$('voiceTip');el.textContent='🎙 '+t;el.style.display='block';clearTimeout(el._t);el._t=setTimeout(()=>el.style.display='none',3500);},60);});
 $('btnFull').addEventListener('click',()=>{
   Snd.unlock();const d=document,el=d.documentElement;
   if(!(d.fullscreenElement||d.webkitFullscreenElement)){
