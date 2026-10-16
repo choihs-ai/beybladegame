@@ -2268,11 +2268,13 @@ class RoomNet{
   close(){this.offs.forEach(f=>{try{f();}catch(e){}});this.offs=[];if(this.r)this.r.leave().catch(()=>{});this.r=null;}
 }
 class MsgNet{
-  constructor(){this.local={};this.remote=Object.create(null);this.alive=false;}
-  pub(patch){Object.assign(this.local,patch);this._send({t:'p',d:patch});}
-  _hello(){this._send({t:'p',d:this.local,full:1});}
+  constructor(){this.local={};this.remote=Object.create(null);this.alive=false;this.q=0;this.rq=0;this.sentAt=0;}
+  /* 매번 내 상태 전체 + 순번을 보낸다: 패킷이 빠지거나 순서가 바뀌어도 최신 것만 쓰면 됨 (빠른 비신뢰 채널용) */
+  pub(patch){Object.assign(this.local,patch);this._hello();}
+  _hello(){this.sentAt=performance.now();this._send({t:'p',d:this.local,full:1,q:++this.q});}
   _recv(m){
     if(!m||typeof m!=='object')return;
+    if(typeof m.q==='number'){if(m.q<=this.rq)return;this.rq=m.q;}
     if(m.t==='p'&&m.d&&typeof m.d==='object'&&!Array.isArray(m.d)){
       if(m.full)this.remote=Object.create(null);
       for(const k of Object.keys(m.d))if(safeKey(k))this.remote[k]=m.d[k];
@@ -2303,7 +2305,7 @@ class PeerNet extends MsgNet{
     this.role=role;const id='beyx-'+PROTO+'-'+code.toLowerCase();
     await new Promise((res,rej)=>{
       const peer=this.peer=role==='host'?new window.Peer(id,{debug:0}):new window.Peer({debug:0});let opened=false;
-      peer.on('open',()=>{opened=true;if(role==='guest')this._bind(peer.connect(id,{reliable:true,serialization:'json'}));res();});
+      peer.on('open',()=>{opened=true;if(role==='guest')this._bind(peer.connect(id,{reliable:false,serialization:'json'}));res();});
       peer.on('connection',c=>{
         if(this.conn&&this.conn.open){c.on('open',()=>{try{c.send({t:'full'});}catch(e){}setTimeout(()=>{try{c.close();}catch(e){}},400);});return;}
         this._bind(c);});
@@ -2318,7 +2320,8 @@ class PeerNet extends MsgNet{
   }
   _bind(c){
     this.conn=c;
-    c.on('open',()=>{this.alive=true;this._hello();});
+    c.on('open',()=>{this.alive=true;this.rq=0;this._hello();});
+    clearInterval(this.iv);this.iv=setInterval(()=>{if(this.alive&&performance.now()-this.sentAt>400)this._hello();},200);
     c.on('data',d=>this._recv(d));
     c.on('close',()=>{if(this.conn===c)this._gone();});
     c.on('error',()=>{});
@@ -2326,8 +2329,8 @@ class PeerNet extends MsgNet{
   myPeer(){return this.peer?this.peer.id:null;}
   remoteId(){return this.conn?this.conn.peer:null;}
   _send(m){if(this.conn&&this.conn.open){try{this.conn.send(m);}catch(e){}}}
-  _gone(){const was=this.alive;this.alive=false;this.conn=null;this.remote=Object.create(null);if(was)this.onLeave&&this.onLeave();}
-  close(){this._send({t:'bye'});try{this.conn&&this.conn.close();}catch(e){}try{this.peer&&this.peer.destroy();}catch(e){}this.conn=null;this.peer=null;this.alive=false;}
+  _gone(){const was=this.alive;this.alive=false;this.conn=null;this.rq=0;this.remote=Object.create(null);if(was)this.onLeave&&this.onLeave();}
+  close(){clearInterval(this.iv);for(let i=0;i<3;i++)this._send({t:'bye'});try{this.conn&&this.conn.close();}catch(e){}try{this.peer&&this.peer.destroy();}catch(e){}this.conn=null;this.peer=null;this.alive=false;}
 }
 class LocalNet extends MsgNet{
   async open(code,role){
@@ -2337,7 +2340,7 @@ class LocalNet extends MsgNet{
       const m=e.data;
       if(!m||typeof m!=='object'||m.from===this.me||m.role===this.role)return;
       if(this.peer&&m.from!==this.peer)return;
-      if(!this.alive){if(m.t==='bye')return;this.alive=true;this.peer=m.from;this._hello();}
+      if(!this.alive){if(m.t==='bye')return;this.alive=true;this.peer=m.from;this.rq=0;this._hello();}
       this._recv(m);
     };
     this._hello();
@@ -2346,7 +2349,7 @@ class LocalNet extends MsgNet{
   myPeer(){return this.me;}
   remoteId(){return this.peer;}
   _send(m){try{if(this.bc)this.bc.postMessage(Object.assign({},m,{from:this.me,role:this.role}));}catch(e){}}
-  _gone(){if(this.alive){this.alive=false;this.peer=null;this.remote=Object.create(null);this.onLeave&&this.onLeave();}}
+  _gone(){if(this.alive){this.alive=false;this.peer=null;this.rq=0;this.remote=Object.create(null);this.onLeave&&this.onLeave();}}
   close(){this._send({t:'bye'});clearInterval(this.iv);if(this.bc)this.bc.close();this.bc=null;this.alive=false;}
 }
 function makeNet(){
@@ -2420,7 +2423,7 @@ matchEndVisual=recWrap(23,matchEndVisual,a=>[a[0]]);
 const Online={
   net:null,role:null,code:'',view:'home',busy:false,isOpen:false,inMatch:false,remote:null,remoteKey:'',names:['1P','2P'],
   mid:0,curMid:0,joinTimer:0,gp:null,saved:null,myCfg:null,
-  inp:{m:0,a:0,b:0,o:0},sentInp:'',last:{a:0,b:0,o:0,m:0},
+  inp:{m:0,a:0,b:0,o:0},sentInp:'',inQ:0,lastQ:0,last:{a:0,b:0,o:0,m:0},
   lastSend:0,frame:0,lastF:-1,lastFx:0,tg:[{},{}],lastR:0,lastSc:'',endShown:false,
   myP(){return this.role==='host'?0:(this.role==='guest'?1:null);},
   nick(){return San.str($('onNick').value,8,'플레이어');},
@@ -2573,7 +2576,7 @@ const Online={
     if(this.role!=='host'||!this.remote||!this.net)return;
     this.mid=(this.mid%1000000)+1+Math.floor(Math.random()*1000);
     players[0].cfg=Object.assign({},this.myCfg);players[1].cfg=Object.assign({},this.remote.c);
-    Rec.buf=[];this.last={a:0,b:0,o:0,m:0};this.inMatch=true;this.frame=0;this.lastSend=0;
+    Rec.buf=[];this.last={a:0,b:0,o:0,m:0};this.lastQ=0;this.inMatch=true;this.frame=0;this.lastSend=0;
     this.net.pub({ph:'play',mid:this.mid,c0:encCfg(players[0].cfg),c1:encCfg(players[1].cfg),w:WIN_SCORE,s:null});
     this.hideOverlay();this.resultButtons();startMatch();
   },
@@ -2585,9 +2588,10 @@ const Online={
   /* 게스트 입력은 "입력"으로만 해석: 방향 비트 → 기울기, 버튼 누른 횟수 증가분 → press() */
   hostInput(i){
     i=San.obj(i);if(!i||San.int(i.k,0,2e9,-1)!==this.mid)return;
+    const q=San.int(i.q,0,2e9,0);if(q<=this.lastQ)return;this.lastQ=q;
     const m=San.int(i.m,0,31,0);
     for(const [k,act] of [['a','impact'],['b','mash'],['o','od']]){
-      const v=San.int(i[k],0,1e9,0);let d=v-this.last[k];this.last[k]=v;
+      const v=San.int(i[k],0,1e9,0);let d=v-this.last[k];if(d>0)this.last[k]=v;
       if(d<=0)continue;d=Math.min(d,6);for(let n=0;n<d;n++)press(1,act);
     }
     const pl=players[1],tx=((m&8)?1:0)-((m&4)?1:0),ty=((m&2)?1:0)-((m&1)?1:0),l=Math.hypot(tx,ty);
@@ -2597,7 +2601,7 @@ const Online={
     this.last.m=m;
   },
   hostTick(now){
-    if(!this.net||!this.inMatch||now-this.lastSend<32)return;   // 약 30회/초
+    if(!this.net||!this.inMatch||now-this.lastSend<(NetEnv.kind==='room'?32:15))return;   // Claude 방 약 30회/초, P2P 약 60회/초
     this.lastSend=now;this.net.pub({s:this.encodeSnap(now),gp:this.gp});
   },
   encodeSnap(now){
@@ -2620,7 +2624,7 @@ const Online={
     players[0].cfg=decCfg(s.c0);players[1].cfg=decCfg(s.c1);
     const w=San.int(s.w,0,99,4);WIN_SCORE=[4,7,10].indexOf(w)>=0?w:4;
     this.inMatch=true;this.endShown=false;this.lastFx=0;this.lastF=-1;this.lastR=0;this.lastSc='';this.tg=[{},{}];
-    this.inp={m:0,a:0,b:0,o:0};this.sentInp='';
+    this.inp={m:0,a:0,b:0,o:0};this.sentInp='';this.inQ=0;
     game.timers=[];game.score=[0,0];game.round=0;game.state='shoot';game.sudden=false;game.cine=null;game.orbit=null;game.clash=null;game.cliff=null;
     players[0].ai=players[1].ai=false;
     for(let p=0;p<2;p++){buildTopFor(p);const t=tops[p];t.burstMax=t.burst=t.st.burstMax;t.state='idle';t.mesh.root.visible=false;}
@@ -2633,11 +2637,11 @@ const Online={
   gRelease(){this.inp.m&=~16;this.gSend();},
   gSend(){
     const i=this.inp,key=i.m+','+i.a+','+i.b+','+i.o;if(key===this.sentInp||!this.net)return;
-    this.sentInp=key;this.net.pub({i:{k:this.curMid,m:i.m,a:i.a,b:i.b,o:i.o}});
+    this.sentInp=key;this.net.pub({i:{k:this.curMid,q:++this.inQ,m:i.m,a:i.a,b:i.b,o:i.o}});
   },
   applySnap(s){
     s=San.obj(s);if(!s)return;
-    const f=San.int(s.f,0,2e9,0);if(f===this.lastF)return;this.lastF=f;
+    const f=San.int(s.f,0,2e9,0);if(f<=this.lastF)return;this.lastF=f;const at=performance.now();
     const N=(v,lo,hi,d)=>San.num(v,lo,hi,d);
     const r=San.int(s.r,0,999,0);
     if(r!==this.lastR&&r>0){this.lastR=r;game.round=r;roundReset();for(let p=0;p<2;p++){this.tg[p]={};tops[p].mesh.root.visible=true;}}
@@ -2649,7 +2653,7 @@ const Online={
     const T=San.arr(s.T,2);
     for(let p=0;p<2;p++){
       const a=San.arr(T[p],13);if(a.length<13)continue;const t=tops[p],g=this.tg[p];
-      g.x=N(a[0],-40,40,t.x);g.z=N(a[1],-40,40,t.z);g.y=N(a[2],-80,40,t.y);
+      g.x=N(a[0],-40,40,t.x);g.z=N(a[1],-40,40,t.z);g.y=N(a[2],-80,40,t.y);g.at=at;
       t.vx=N(a[3],-80,80,0);t.vz=N(a[4],-80,80,0);t.rpm=N(a[5],0,2,0);t.burst=N(a[6],0,100,100)/100*t.burstMax;
       const st=TST[San.idx(a[7],TST.length,4)],fl=San.int(a[8],0,127,0);
       const jump=st!==t.state||Math.hypot(g.x-t.x,g.z-t.z)>2.5;t.state=st;
@@ -2663,7 +2667,7 @@ const Online={
       const a=San.arr(P[p],8);if(a.length<8)continue;const pl=players[p],fl=San.int(a[3],0,63,0),u=San.idx(a[7],4,0);
       pl.gauge=N(a[0],0,1,0);pl.sp=N(a[1],0,100,0);pl.charge=N(a[2],0,1,0);
       pl.gaugeOn=!!(fl&1);pl.fired=!!(fl&2);pl.charging=!!(fl&4);pl.parryT=fl&8?0.1:0;pl.limitUsed=!!(fl&16);pl.spReady=!!(fl&32);
-      pl.aim=N(a[4],-50,50,pl.aim);pl.combo=San.int(a[5],0,99,0);pl.cdash=N(a[6],0,9,0);
+      if(!(p===1&&game.state==='shoot'&&(this.inp.m&15)))pl.aim=N(a[4],-50,50,pl.aim);pl.combo=San.int(a[5],0,99,0);pl.cdash=N(a[6],0,9,0);
       pl.ult=u?{type:ULT_T[u-1],name:BLADES[tops[p].st.blade].ult.name}:null;
     }
     const cl=San.arr(s.cl,8);
@@ -2742,8 +2746,12 @@ const Online={
     }
   },
   guestTick(dt,rdt){
-    const k=1-Math.exp(-rdt*16);
-    for(let p=0;p<2;p++){const t=tops[p],g=this.tg[p];if(g.x===undefined)continue;t.x+=(g.x-t.x)*k;t.z+=(g.z-t.z)*k;t.y+=(g.y-t.y)*k;}
+    const k=1-Math.exp(-rdt*26),now=performance.now();
+    const slow=!!game.cine||fx.burstSlow>0||fx.fb>0||fx.critSlow>0||!!game.clash||!!game.cliff;
+    for(let p=0;p<2;p++){const t=tops[p],g=this.tg[p];if(g.x===undefined)continue;
+      let tx=g.x,tz=g.z;
+      if(!slow&&t.state==='spin'&&!t.locked&&!t.hanging){const age=Math.min(0.1,(now-(g.at||now))/1000);tx+=t.vx*age;tz+=t.vz*age;}
+      t.x+=(tx-t.x)*k;t.z+=(tz-t.z)*k;t.y+=(g.y-t.y)*k;}
     const c=game.clash;
     if(c&&c.n&&dt>0){
       const [nx,nz]=c.n,off=clamp((c.cnt[0]-c.cnt[1])*0.035,-0.5,0.5),cx=c.mx+nx*off,cz=c.mz+nz*off,cy=floorY(cx,cz)+0.55;
@@ -2759,6 +2767,7 @@ const Online={
     const tl=players[1].tilt;let m=this.inp.m&16;
     if(tl.y<-0.35)m|=1;if(tl.y>0.35)m|=2;if(tl.x<-0.35)m|=4;if(tl.x>0.35)m|=8;
     this.inp.m=m;this.gSend();
+    const me=players[1];if(game.state==='shoot'&&!me.fired&&(m&15)){const tx=((m&8)?1:0)-((m&4)?1:0),ty=((m&2)?1:0)-((m&1)?1:0);if(tx||ty)me.aim=Math.atan2(ty,tx);}
   }
 };
 function toast(t){const el=$('toast');el.textContent=t;el.classList.add('on');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('on'),2600);}
