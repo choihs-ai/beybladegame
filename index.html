@@ -310,6 +310,7 @@ button{font-family:inherit;touch-action:none;cursor:pointer;-webkit-user-select:
 .onVsX{align-self:center;font-size:30px;font-weight:900;font-style:italic;color:var(--gold)}
 #onHostCtl{display:flex;flex-direction:column;align-items:center;gap:6px}
 #online .evrow button{min-height:44px;padding:6px 12px}
+#onVia{font-size:12px;font-weight:800;opacity:.8;min-height:14px}
 #onMsg{min-height:20px;font-size:14px;font-weight:800;text-align:center}
 #onMsg.err{color:#ff8aa8}
 #toast{position:fixed;left:50%;bottom:14%;transform:translateX(-50%);z-index:95;background:rgba(10,14,30,.95);border:2px solid #fff;border-radius:12px;padding:10px 16px;font-weight:900;display:none;pointer-events:none;white-space:nowrap}
@@ -429,6 +430,7 @@ button{font-family:inherit;touch-action:none;cursor:pointer;-webkit-user-select:
       <div class="evrow"><span>🏆 목표</span><button data-owin="4">4점</button><button data-owin="7">7점</button><button data-owin="10">10점</button></div>
       <button id="onStart" class="onBtn start">시작</button>
     </div>
+    <div id="onVia"></div>
     <div id="onGuestWait" class="onWaiting">호스트가 시작하길 기다리는 중<span class="dots"></span></div>
     <button class="onBtn ghost" data-onleave>나가기</button>
   </div>
@@ -2243,6 +2245,7 @@ const r1=v=>Math.round((+v||0)*10)/10,r2=v=>Math.round((+v||0)*100)/100;
    open(code, role) · pub(patch: merge-patch) · onRemote(state) · onLeave() · onError(code) · close() */
 const NetEnv={kind:null,room:null};
 class RoomNet{
+  get sendMs(){return 32;}
   constructor(room){this.room=room;this.r=null;this.offs=[];this.remotePeer=null;this.lastPres=null;}
   async open(code,role){
     this.role=role;
@@ -2300,6 +2303,7 @@ function loadPeerJS(){
   return peerLib;
 }
 class PeerNet extends MsgNet{
+  get sendMs(){return 15;}
   async open(code,role){
     await loadPeerJS();
     this.role=role;const id='beyx-'+PROTO+'-'+code.toLowerCase();
@@ -2332,29 +2336,129 @@ class PeerNet extends MsgNet{
   _gone(){const was=this.alive;this.alive=false;this.conn=null;this.rq=0;this.remote=Object.create(null);if(was)this.onLeave&&this.onLeave();}
   close(){clearInterval(this.iv);for(let i=0;i<3;i++)this._send({t:'bye'});try{this.conn&&this.conn.close();}catch(e){}try{this.peer&&this.peer.destroy();}catch(e){}this.conn=null;this.peer=null;this.alive=false;}
 }
-class LocalNet extends MsgNet{
+/* 메시지 버스 위의 1:1 연결 (BroadcastChannel / MQTT 중계 공용): 모두에게 뿌리고 from·role 로 상대만 골라 듣는다 */
+class BusNet extends MsgNet{
   async open(code,role){
-    this.role=role;this.me=uid();this.peer=null;
-    this.bc=new BroadcastChannel('bx-'+code.toLowerCase());
-    this.bc.onmessage=e=>{
-      const m=e.data;
-      if(!m||typeof m!=='object'||m.from===this.me||m.role===this.role)return;
-      if(this.peer&&m.from!==this.peer)return;
-      if(!this.alive){if(m.t==='bye')return;this.alive=true;this.peer=m.from;this.rq=0;this._hello();}
-      this._recv(m);
-    };
+    this.role=role;this.me=uid();this.peer=null;this.otherHost=false;
+    await this._connect(code,m=>this._onBus(m));
+    if(role==='host'&&this.probeMs){   // 같은 코드를 이미 쓰는 호스트가 있으면 새 코드로
+      await new Promise(r=>setTimeout(r,this.probeMs));
+      if(this.otherHost){this.close();throw new Error('unavailable-id');}
+    }
     this._hello();
-    this.iv=setInterval(()=>{if(!this.alive||this.role==='host')this._hello();},1000);
+    this.iv=setInterval(()=>{if(!this.alive||this.role==='host'||performance.now()-this.sentAt>800)this._hello();},1000);
   }
+  _onBus(m){
+    if(!m||typeof m!=='object'||m.from===this.me||typeof m.from!=='string')return;
+    if(m.role===this.role){if(m.role==='host'&&m.t==='p')this.otherHost=true;return;}
+    if(this.peer&&m.from!==this.peer)return;
+    if(!this.alive){if(m.t==='bye'||m.t==='full')return;this.alive=true;this.peer=m.from;this.rq=0;this._hello();}
+    this._recv(m);
+  }
+  reject(){this._send({t:'full'});this.alive=false;this.peer=null;this.rq=0;this.remote=Object.create(null);}
   myPeer(){return this.me;}
   remoteId(){return this.peer;}
-  _send(m){try{if(this.bc)this.bc.postMessage(Object.assign({},m,{from:this.me,role:this.role}));}catch(e){}}
   _gone(){if(this.alive){this.alive=false;this.peer=null;this.rq=0;this.remote=Object.create(null);this.onLeave&&this.onLeave();}}
-  close(){this._send({t:'bye'});clearInterval(this.iv);if(this.bc)this.bc.close();this.bc=null;this.alive=false;}
+  close(){clearInterval(this.iv);for(let i=0;i<2;i++)this._send({t:'bye'});this._disconnect();this.alive=false;}
+}
+class LocalNet extends BusNet{
+  get sendMs(){return 15;}
+  async _connect(code,onMsg){this.bc=new BroadcastChannel('bx-'+code.toLowerCase());this.bc.onmessage=e=>onMsg(e.data);}
+  _send(m){try{if(this.bc)this.bc.postMessage(Object.assign({},m,{from:this.me,role:this.role}));}catch(e){}}
+  _disconnect(){if(this.bc)this.bc.close();this.bc=null;}
+}
+/* 공개 MQTT 브로커(WebSocket)를 우편함처럼 쓰는 중계: 통신사 망이 달라 P2P가 막혀도 연결된다 */
+let mqttLib=null;
+function loadMqtt(){
+  if(window.mqtt&&window.mqtt.connect)return Promise.resolve();
+  if(mqttLib)return mqttLib;
+  mqttLib=new Promise((res,rej)=>{
+    const urls=['https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js','https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js'];let i=0;
+    const next=()=>{
+      if(i>=urls.length){mqttLib=null;rej(new Error('load'));return;}
+      const sc=document.createElement('script');sc.src=urls[i++];sc.async=true;
+      sc.onload=()=>(window.mqtt&&window.mqtt.connect?res():next());sc.onerror=()=>{sc.remove();next();};
+      document.head.appendChild(sc);
+    };
+    next();
+  });
+  return mqttLib;
+}
+const RELAYS=['wss://broker.emqx.io:8084/mqtt','wss://broker.hivemq.com:8884/mqtt','wss://test.mosquitto.org:8081/mqtt'];
+const RELAY_TEST=(()=>{const m=/^#relay=(ws:\/\/(?:127\.0\.0\.1|localhost):\d{2,5})$/.exec(location.hash);return m?m[1]:null;})();   // 테스트용 로컬 브로커
+class RelayNet extends BusNet{
+  get sendMs(){return 40;}   // 공개 브로커 예의상 약 25회/초
+  get probeMs(){return 1300;}
+  async _connect(code,onMsg){
+    await loadMqtt();
+    const topic='beyx/'+PROTO+'/'+code.toLowerCase();
+    for(const url of (RELAY_TEST?[RELAY_TEST]:RELAYS)){
+      const c=await new Promise(res=>{
+        let cl;try{cl=window.mqtt.connect(url,{clientId:'bx_'+this.me,clean:true,connectTimeout:5000,reconnectPeriod:2000,keepalive:30});}catch(e){res(null);return;}
+        const to=setTimeout(()=>{try{cl.end(true);}catch(e){}res(null);},6000);
+        cl.once('connect',()=>{clearTimeout(to);res(cl);});cl.on('error',()=>{});
+      });
+      if(!c)continue;
+      const okSub=await new Promise(res=>c.subscribe(topic,{qos:0},err=>res(!err)));
+      if(!okSub){try{c.end(true);}catch(e){}continue;}
+      c.on('message',(t,payload)=>{
+        if(t!==topic||!payload||payload.length>8192)return;
+        let m;try{m=JSON.parse(typeof payload==='string'?payload:new TextDecoder().decode(payload));}catch(e){return;}
+        onMsg(m);
+      });
+      this.cli=c;this.topic=topic;return;
+    }
+    throw new Error('network');
+  }
+  _send(m){if(this.cli&&this.cli.connected){try{this.cli.publish(this.topic,JSON.stringify(Object.assign({},m,{from:this.me,role:this.role})),{qos:0});}catch(e){}}}
+  _disconnect(){const c=this.cli;this.cli=null;if(c)setTimeout(()=>{try{c.end(false);}catch(e){}},150);}
+}
+/* GitHub Pages 등: P2P 직접 연결을 먼저 시도하고, 안 되면 중계로 (호스트는 둘 다 열어 두고 먼저 온 쪽을 씀) */
+const waitUntil=(fn,ms)=>new Promise(res=>{const t0=performance.now();const iv=setInterval(()=>{const v=fn();if(v===true||v===false){clearInterval(iv);res(v);}else if(performance.now()-t0>ms){clearInterval(iv);res(false);}},100);});
+const withTimeout=(pr,ms)=>Promise.race([pr,new Promise((_,rej)=>setTimeout(()=>rej(new Error('network')),ms))]);
+class HybridNet{
+  constructor(){this.nets=[];this.act=null;this.probe=false;}
+  get sendMs(){return this.act?this.act.sendMs:40;}
+  via(){return this.act?(this.act instanceof PeerNet?'p2p':'relay'):null;}
+  _wire(n){
+    n.onRemote=st=>{
+      if(this.role==='host'){if(!this.act)this.act=n;else if(this.act!==n){if(n.reject)n.reject();return;}}
+      if(n===this.act||this.role==='guest')this.onRemote&&this.onRemote(st);
+    };
+    n.onLeave=()=>{if(n===this.act){if(this.role==='host')this.act=null;this.onLeave&&this.onLeave();}};
+    n.onError=c=>{
+      if(this.probe&&n instanceof PeerNet){n.failed=true;return;}
+      if(n===this.act||this.nets.length<=1)this.onError&&this.onError(c);
+      else{this.nets=this.nets.filter(x=>x!==n);try{n.close();}catch(e){}}
+    };
+  }
+  async open(code,role){
+    this.role=role;
+    if(role==='host'){
+      const p=new PeerNet(),r=new RelayNet();this._wire(p);this._wire(r);
+      const res=await Promise.allSettled([withTimeout(p.open(code,'host'),9000),r.open(code,'host')]);
+      const ids=res.map(x=>x.status==='rejected'&&x.reason&&x.reason.message);
+      if(ids.includes('unavailable-id')){try{p.close();}catch(e){}try{r.close();}catch(e){}throw new Error('unavailable-id');}
+      [p,r].forEach((n,i)=>{if(res[i].status==='fulfilled')this.nets.push(n);else{try{n.close();}catch(e){}}});
+      if(!this.nets.length)throw res[1].reason||res[0].reason||new Error('network');
+      return;
+    }
+    // 게스트: 1) P2P 6초 시도 → 2) 중계
+    const p=new PeerNet();this._wire(p);this.probe=true;let ok=false;
+    try{await withTimeout(p.open(code,'guest'),8000);ok=await waitUntil(()=>p.alive?true:(p.failed?false:null),6000);}catch(e){ok=false;}
+    this.probe=false;
+    if(ok){this.nets=[p];this.act=p;return;}
+    try{p.close();}catch(e){}
+    const r=new RelayNet();this._wire(r);await r.open(code,'guest');this.nets=[r];this.act=r;
+  }
+  pub(patch){for(const n of (this.act?[this.act]:this.nets))n.pub(patch);}
+  myPeer(){return this.act?this.act.myPeer():null;}
+  remoteId(){return this.act?this.act.remoteId():null;}
+  close(){this.nets.forEach(n=>{try{n.close();}catch(e){}});this.nets=[];this.act=null;}
 }
 function makeNet(){
   if(NetEnv.kind==='room')return new RoomNet(NetEnv.room);
-  if(NetEnv.kind==='peer')return new PeerNet();
+  if(NetEnv.kind==='peer')return new HybridNet();
   if(NetEnv.kind==='local')return new LocalNet();
   return null;
 }
@@ -2438,7 +2542,7 @@ const Online={
     const el=$('onKind'),b=document.createElement('b');let rest='';el.textContent='';
     if(!k)b.textContent='연결 방식 확인 중…';
     else if(k==='room'){b.textContent='Claude 실시간 방';rest=' · 친구도 이 페이지를 열 수 있게 공유해 주세요';}
-    else if(k==='peer'){b.textContent='P2P 직접 연결 (PeerJS)';rest=' · 와이파이가 달라도 인터넷만 되면 OK';}
+    else if(k==='peer'){b.textContent='P2P 직접 연결 + 자동 중계';rest=' · 직접 연결이 막히면(다른 와이파이·LTE) 중계 서버로 자동 전환';}
     else if(k==='local'){b.textContent='테스트 모드';rest=' · 같은 브라우저의 다른 탭과 연결';}
     else{b.textContent='온라인 사용 불가';rest=' · 로그인한 계정으로 열어 주세요';}
     el.appendChild(b);el.appendChild(document.createTextNode(rest));
@@ -2461,6 +2565,8 @@ const Online={
     this.card($('onPl1'),host?this.remote:me,host?'게스트':'게스트 · 나',1);
     $('onHostCtl').classList.toggle('off',!host);$('onGuestWait').classList.toggle('off',host);
     $('onStart').disabled=!(host&&this.remote);
+    const via=this.remote&&this.net&&this.net.via?this.net.via():null;
+    $('onVia').textContent=via==='p2p'?'🔗 직접 연결(P2P) · 가장 빠름':(via==='relay'?'🛰 중계 서버 경유 · 직접 연결이 막혀서 우회 중':'');
     document.querySelectorAll('#online [data-owin]').forEach(b=>b.classList.toggle('on',+b.dataset.owin===WIN_SCORE));
     document.querySelectorAll('#online [data-oev]').forEach(b=>b.classList.toggle('on',!!evOpts[b.dataset.oev]));
   },
@@ -2601,7 +2707,7 @@ const Online={
     this.last.m=m;
   },
   hostTick(now){
-    if(!this.net||!this.inMatch||now-this.lastSend<(NetEnv.kind==='room'?32:15))return;   // Claude 방 약 30회/초, P2P 약 60회/초
+    if(!this.net||!this.inMatch||now-this.lastSend<(this.net.sendMs||32))return;   // Claude 방 30회/초 · P2P 60회/초 · 중계 25회/초
     this.lastSend=now;this.net.pub({s:this.encodeSnap(now),gp:this.gp});
   },
   encodeSnap(now){
@@ -2774,6 +2880,7 @@ function toast(t){const el=$('toast');el.textContent=t;el.classList.add('on');cl
 function selectCode(){try{const r=document.createRange();r.selectNodeContents($('onCodeBig'));const s=getSelection();s.removeAllRanges();s.addRange(r);}catch(e){}}
 async function detectNet(){
   if(location.hash==='#local'&&'BroadcastChannel' in window)NetEnv.kind='local';
+  else if(RELAY_TEST)NetEnv.kind='peer';
   else{
     for(let i=0;i<15&&!(window.claude&&typeof window.claude.use==='function');i++)await new Promise(r=>setTimeout(r,100));
     if(window.claude&&typeof window.claude.use==='function'){
